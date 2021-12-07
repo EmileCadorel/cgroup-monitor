@@ -27,17 +27,9 @@ namespace monitor {
 	    if (cfg.has <utils::config::dict> ("market")) {
 		auto mark = cfg.get <utils::config::dict> ("market");
 		MarketConfig c;
-		c.marketIncrement = mark.getOr <float> ("market-increment", 1.0);
-		c.cyclePrice = mark.getOr<float> ("cycle-price", 1.0);
-		c.cycleIncrement = mark.getOr<float> ("cycle-increment", 0.1);
-		c.baseCycle = mark.getOr<float> ("base-cycle", 0.01);
-		c.windowScale = mark.getOr<float> ("window-scale", 0.1);
-		c.moneyIncrement = mark.getOr<float> ("money-increment", 0.3);
-		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 85.0);
-		c.triggerDecrement = mark.getOr<float> ("trigger-decrement", 25.0);
+		c.baseCycle = mark.getOr<float> ("base-cycle", 0.3);
+		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0);
 		c.windowSize = mark.getOr<int> ("window-size", 10000);
-		c.windowMultiplier = mark.getOr<int> ("window-multiplier", 5);
-		c.windowMaximumTurn = mark.getOr<int> ("max-window-turn", 10);
 
 		this-> _market = Market (c);
 		this-> _withMarket = true;
@@ -52,7 +44,7 @@ namespace monitor {
 	    while (true) {
 		this-> update ();
 		auto s = std::chrono::system_clock::now ();
-		if (this-> _withMarket) {
+		if (this-> _withMarket) { // The monitor can run without market to make comparison with no capping easily
 		    auto result = this-> _market.update (this-> _vms);
 		    this-> applyResult (result);
 		}

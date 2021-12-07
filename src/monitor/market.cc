@@ -12,56 +12,178 @@ namespace monitor {
 
     Market::Market () {
 	this-> _config = MarketConfig {
-	    1.0,
-	    1.0,
-	    0.1,
-	    0.01,
-	    0.1,
 	    0.3,
-	    85.0,
-	    25.0, 
-	    10000,
-	    5,
-	    10
+	    0.95,
+	    10000
 	};
     }
 
     Market::Market (MarketConfig conf) {
 	this-> _config = conf;
     }
+
+    /**
+     * ================================================================================
+     * ================================================================================
+     * =========================       MARKET / AUCTION       =========================
+     * ================================================================================
+     * ================================================================================
+     */
+
     
+    /**
+     * Cf. market.hh
+     */
     std::map <std::string, unsigned long> Market::update (const std::map <std::string, VMInfo> & vms) {
 	if (vms.size () == 0) return {};
 
-	unsigned long sold, allNeeded = 0;
-	this-> incrementAccounts (vms);
-	std::map <std::string, unsigned long> need;
-	auto base = this-> sellBaseCycles (vms, sold, need);
+	/// The market is the number micro seconds in one second * the number of CPUs on the machine
+	/// everything in the market is reported to the second, the VMInfo, and GroupManager make the relation to tick, it is easier that way
+	unsigned long market = ((unsigned long) (get_nprocs () * 1000000));
+	std::map <std::string, unsigned long> buyers;
 
-	
-	unsigned long market = ((unsigned long) (get_nprocs () * 1000000)) - sold;
-	auto result = this-> buyCycles (vms, base, need, market, this-> _config.cyclePrice, this-> _firstIteration, allNeeded);	
+	/// Sell the base, cycle and compute the list of VMs, that needs more cycles than what they are consuming
+	auto allocated = this-> sellBaseCycles (vms, market, buyers);
+
+	/// Run the auction, for the VMs that needs more cycles than the nominal
+	unsigned long allNeeded = 0;
+	this-> buyCycles (vms, allocated, buyers, market, this-> _firstIteration, allNeeded);
+
+	/// Compute the number of cycles that are sold since the beginning, for debugging infos
 	this-> _firstMarket = (get_nprocs () * 1000000) - market;
 
-	// Rest some cycle that have not been sold, so there is some room for optimization
-        // Maybe they are not bought because nobody has sufficient money to buy them, even if they are needed, so we run a second time the market but this time everything is free
-        // This does not impact the performance of the VM with money but that are not buying, they have enough resources
+	// Rest some cycle that have not been sold, so there is some room for optimization	
 	if (market > 0) {
 	    long allSold = market;
-	    for (auto & v : vms) {
-		if (need [v.first] != 0) {
-		    float percent = (float) (need [v.first]) / (float) allNeeded;
-		    unsigned long add = (unsigned long) (percent * market);
-		    result [v.first] += add;
-		    allSold -= add;
-		}
+	    for (auto & v : buyers) { // we split the rest of the market between all the VMs that failed to buy
+		float percent = (float) (v.second) / (float) allNeeded; // Implication of the VMs in the market 
+		unsigned long add = (unsigned long) (percent * market);
+		allocated [v.first] += add;
+		allSold -= add;	   
 	    }
 	    
 	    this-> _lost = allSold;
 	} else this-> _lost = 0;
 
-	return result;
+	return allocated;
+    }    
+
+    /**
+     * Cf. market.hh
+     */
+    void Market::buyCycles (const std::map <std::string, cgroup::VMInfo> & vms,
+			    std::map <std::string, unsigned long> & allocated,
+			    std::map <std::string, unsigned long> & buyers,
+			    unsigned long & market,
+			    unsigned long & iterations,
+			    unsigned long & allNeeded)
+	
+    {
+	/// The list of VMs that failed their bidding, because they have no money
+	std::map <std::string, unsigned long> failed;
+	iterations = 0;	
+	while (market > 0 && buyers.size () > 0) {
+	    iterations += 1; 
+	    for (auto v = buyers.cbegin () ; v != buyers.cend () ; ) { // we cannot use : for (auto & v : buyers), because we need to erase elements in the map
+		auto money = this-> _accounts [v-> first];
+		if (v-> second != 0) {
+		    unsigned long windowSize = std::min (this-> _config.windowSize, money);
+
+		    /// The VM can buy at most, what they can (money, as windowSize), what they need (v-> second), or what is left in the market
+		    auto bought = std::min (std::min (windowSize, v-> second), market);
+		    if (bought != 0) { /// The VM bought some cycles
+			this-> _accounts [v-> first] = money - bought; // we remove the money from its account
+			allocated [v-> first] = allocated [v-> first] + bought; // we update its allocation
+			market = market - bought; // we remove the bought cycles from the market
+			buyers [v-> first] -= bought; // we remove the needs
+			v ++; // next iteration 
+		    } else { // bought nothing (or the VM has no money, or the market is empty)
+			failed.emplace (v-> first, v-> second); // Insert in failed for final phase
+			allNeeded += v-> second; // sum of all the failed
+			buyers.erase (v ++); // remove the VM from the buyers, the next iteration would fail as well
+		    }
+		} else {
+		    buyers.erase (v ++); // The VM has no need, we remove it from the buyers
+		}
+	    }
+	}
+
+	buyers = std::move (failed); // The buyers that are staying in the buyers queue are those who failed to buy (no money, or empty market)
     }
+
+
+    /**
+     * Cf. market.hh
+     */
+    std::map <std::string, unsigned long> Market::sellBaseCycles (const std::map <std::string, cgroup::VMInfo> & vms,
+								  unsigned long & market,
+								  std::map <std::string, unsigned long> & buyers)
+    {
+	std::map <std::string, unsigned long> allocated;
+	for (auto & v : vms) {
+	    auto usage = v.second.getAbsoluteConso ();
+	    auto nominal = this-> _config.baseCycle * v.second.getMaximumConso ();
+	    auto max = v.second.getMaximumConso ();
+	    auto perc_usage = v.second.getRelativePercentConso ();
+	    
+	    /**
+	     * We have three cases : 
+	     *  - 1) The VM uses less than nominal frequency, and less than trigger, in that case we give it some money, and set the capping to the current usage + a bit more to avoid trigger at the next market-iteration. 
+	     */
+	    if (usage < nominal && perc_usage < this-> _config.triggerIncrement) {
+		auto money = nominal - usage;
+		auto cap = usage + ((100.0 - this-> _config.triggerIncrement) / 100.0) * max;
+		
+		allocated [v.first] = cap;
+		market -= cap;
+		auto fnd = this-> _accounts.find (v.first);
+		if (fnd == this-> _accounts.end ()) {
+		    this-> _accounts [v.first] = money;
+		} else {
+		    fnd-> second = fnd-> second + money;
+		}
+	    }
+	    /*
+	     *  - 2) The VM uses more than nominal, and less than trigger, in that case we give no money, cap to nominal, and set the needs at the current usage + a bit more to avoid trigger at the next market-iteration. 
+	     */
+	    else if (usage >= nominal && perc_usage < this-> _config.triggerIncrement) {
+		auto cap = usage + ((100.0 - this-> _config.triggerIncrement) / 100.0) * max;
+		buyers [v.first] = cap - nominal;
+		allocated [v.first] = nominal;
+		market -= nominal;
+		auto fnd = this-> _accounts.find (v.first);
+		if (fnd == this-> _accounts.end ()) {
+		    this-> _accounts [v.first] = 0;
+		}
+	    }
+	    
+	    /*
+	     *  - 3) The VM uses more than nominal, and more than trigger, in that case we give no money, cap to nominal, and set the needs to maximum consumption. 
+	     */
+	    else {
+		auto cap = max;
+		buyers [v.first] = cap - nominal;
+		allocated [v.first] = nominal;
+		market -= nominal;
+		auto fnd = this-> _accounts.find (v.first);
+		if (fnd == this-> _accounts.end ()) {
+		    this-> _accounts [v.first] = 0;
+		}
+	    }
+
+	}
+
+	return allocated;
+    }
+
+    /**
+     * ================================================================================
+     * ================================================================================
+     * =========================           GETTERS            =========================
+     * ================================================================================
+     * ================================================================================
+     */
+
 
     const std::map <std::string, unsigned long> & Market::getAccounts () const {
 	return this-> _accounts;
@@ -82,92 +204,6 @@ namespace monitor {
     unsigned long Market::getLost () const {
 	return this-> _lost;
     }
+
     
-    std::map <std::string, unsigned long> Market::buyCycles (const std::map <std::string, VMInfo> & vms, const std::map <std::string, unsigned long> & current, std::map <std::string, unsigned long> & needs, unsigned long & market, float cyclePrice, unsigned long & i, unsigned long & allNeed) {
-	auto res = current;
-	auto buyers = vms;
-	i = 0;
-	while (market > 0 && buyers.size () > 0) {
-	    i += 1; 
-	    for (auto v = buyers.cbegin () ; v != buyers.cend () ; ) {
-		auto reserved = res [v-> first];
-		auto need = needs [v-> first];
-		auto money = this-> _accounts [v-> first];
-		if (reserved < need) {
-		    unsigned long window = this-> _config.windowSize; //this-> computeWindowSize (v.first, v.second);
-		    unsigned long windowSize = 0;
-		    if (cyclePrice != 0.0f) {
-			windowSize = std::min (window, (unsigned long) (money / cyclePrice));
-		    } else windowSize = window;
-
-		    auto bought = std::min (std::min (windowSize, need - reserved), market);
-		    if (bought != 0) {
-			this-> _accounts [v-> first] = money - (bought * cyclePrice);
-			res [v-> first] = res [v-> first] + bought;
-			market = market - bought;
-			v ++;
-		    } else {
-			needs [v-> first] = need - reserved;
-			allNeed += need - reserved;
-			buyers.erase (v ++);
-		    }
-		} else {
-		    needs [v-> first] = 0;
-		    buyers.erase (v ++);
-		}
-	    }
-	}
-	
-	return res;
-    }
-
-    unsigned long Market::computeWindowSize (const std::string & name, const VMInfo & vm) const {
-	auto money = this-> _accounts.find (name)-> second;
-	if (money == 0) money = 1; // Log (0) is Nan
-	
-	auto maxCycle = vm.getMaximumConso ();
-	auto perTurn = maxCycle * this-> _config.moneyIncrement;
-	auto n = perTurn * this-> _config.windowMaximumTurn;
-	
-	auto w = std::min ((unsigned long) (this-> _config.windowSize * this-> _config.windowMultiplier),
-			   (unsigned long) (1.0f / std::max ((n - money), 1.0f) * perTurn * (this-> _config.windowSize * this-> _config.windowMultiplier))) + this-> _config.windowSize;
-
-	return w;
-    }
-
-    std::map <std::string, unsigned long> Market::sellBaseCycles (const std::map <std::string, VMInfo> & vms, unsigned long & all, std::map <std::string, unsigned long> & needs) const {
-	std::map <std::string, unsigned long> res;
-	all = 0;
-	for (auto & v : vms) {
-	    auto nb = (unsigned long) (v.second.getMaximumConso () * this-> _config.baseCycle);
-	    auto need = v.second.getAbsoluteCapping ();
-	    if (v.second.getRelativePercentConso () > this-> _config.triggerIncrement) {
-		need = std::min (v.second.getMaximumConso (), (unsigned long) (v.second.getAbsoluteCapping () + (this-> _config.cycleIncrement * v.second.getMaximumConso ())));
-	    } else if (v.second.getRelativePercentConso () > this-> _config.triggerDecrement) {
-		need = std::min (nb, (unsigned long) (v.second.getAbsoluteCapping () - (this-> _config.cycleIncrement * v.second.getMaximumConso ())));
-	    }
-	    
-	    
-	    res.emplace (v.first, nb);
-	    needs.emplace (v.first, need);	    
-	    all += nb;
-	}
-
-	return res;
-    }   
-
-    void Market::incrementAccounts (const std::map <std::string, VMInfo> & vms) {
-	std::map <std::string, unsigned long> res;
-	for (auto & v : vms) {
-	    auto nb = (long) (v.second.getMaximumConso () * this-> _config.moneyIncrement);
-	    auto it = this-> _accounts.find (v.first);
-	    if (it != this-> _accounts.end ()) {
-		res.emplace (v.first, it-> second + nb);
-	    } else res.emplace (v.first, nb);
-	}
-
-	this-> _accounts = res;
-    }
-    
-
 }

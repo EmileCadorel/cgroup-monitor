@@ -8,17 +8,9 @@
 namespace monitor {
 
     struct MarketConfig {
-	float marketIncrement;
-	float cyclePrice;
-	float cycleIncrement;
 	float baseCycle;
-	float windowScale;
-	float moneyIncrement;
 	float triggerIncrement;
-	float triggerDecrement;
-	unsigned int windowSize;
-	unsigned int windowMultiplier;
-	unsigned int windowMaximumTurn;
+	unsigned long windowSize;
     };
     
     
@@ -59,7 +51,7 @@ namespace monitor {
 	 * @warning: this function does not take into account relative tick, and consider everything in absolute (based on tick of 1 second)
 	 * @params: 
 	 *   - vms: the list of running VMs cgroup on the node
-	 * @returns: the number of authorized cycles for each VMs (@warning: based on second, must be reported to tick time)
+	 * @returns: the number of authorized cycles for each VMs (@warning: based on second - i.e. AbsoluteCapping, must be reported to tick time)
 	 */
 	std::map <std::string, unsigned long> update (const std::map <std::string, cgroup::VMInfo> & vms);
 
@@ -70,55 +62,61 @@ namespace monitor {
 	const std::map <std::string, unsigned long> & getAccounts () const;
 
 	/**
-	 * @returns: the number of iterations that were necessary in the first selling 
+	 * @returns: the number of iterations that were necessary in the first auction
 	 */
 	unsigned long getFirstNbIterations () const;
 
 	/**
-	 * @returns: the number of iterations that were necessary in the second selling 
+	 * @returns: the number of iterations that were necessary in the second auction (no relevant in this version)
 	 */
 	unsigned long getSecondNbIterations () const;
 
 
 	/**
-	 * @returns: the number of cycles sold in the first selling
+	 * @returns: the number of cycles sold in the first selling, and in the base selling (meaning all the cycles that are non free.
 	 */
 	unsigned long getFirstMarketSold () const;
 
 	/**
-	 * @returns: the number of cycles that were sold to no one
+	 * @returns: the number of cycles that were sold to no one (ideally this is 0, otherwise they are lost)
+	 * @info: there is a case in which it can be non null: every VMs has money, and use less that this-> _config.triggerIncrement cycles
 	 */
 	unsigned long getLost () const;
 
     private :
 
 	/**
-	 * Run the market
+	 * Run the market, "bidding" if we can call it that way
 	 * @params: 
 	 *   - vms: the vms running on the node
-	 *   - price: the price of one cycle
-	 *   - increment: the percentage to add to the actual consumed percentage of the VMs
+	 *   - market: the number of cycles that can be sold in total
+	 *   - buyers: the number of cycles needed by the VMs
+	 *   - allocated: the current allocated cycles to each VMs
+	 * @ref_returns: 
+	 *    - market: remove all the cycles that are sold
+	 *    - allocated: update the allocations
+	 *    - iterations: the number of iterations required by the auction
+	 *    - buyers: the number of cycles the VMs failed to buy
+	 *    - allNeeded: all the cycles that are needed by the VMs at the end (SUM (needs.values))
+	 * @side_effects: 
+	 *    - update this-> _accounts, by removing the money spent by the VMs on buying cycles
 	 */
-	std::map <std::string, unsigned long> buyCycles (const std::map <std::string, cgroup::VMInfo> & vms, const std::map <std::string, unsigned long> & current, std::map <std::string, unsigned long> & needs, unsigned long & market, float cyclePrice, unsigned long & iterations, unsigned long & allNeeded);
+	void buyCycles (const std::map <std::string, cgroup::VMInfo> & vms, std::map <std::string, unsigned long> & allocated, std::map <std::string, unsigned long> & buyers, unsigned long & market, unsigned long & iterations, unsigned long & allNeeded);
 
-	
+		
 	/**
-	 * Compute the window sizes of the VMs 
-	 * @returns: the size of the selling window for the VMs
-	 */
-	unsigned long computeWindowSize (const std::string & name, const cgroup::VMInfo & vm) const;
-	
-	/**
+	 * @params: 
+	 *   - vms: all the vms infos
+	 *   - market: the current market
+	 * @ref_returns: 
+	 *   - market: updated, removed all the cycles that are sold by default
+	 *   - buyers: all the VMs needing more than their nominal frequency, and that will participate to the market
 	 * @returns: the base cycles, to guarantee the minimum quality of service before running the selling parts
+	 * @side_effects: 
+	 *   - update this-> _accounts, by adding the base money of this current monitor loop and removing the money of the base selling
 	 */
-	std::map <std::string, unsigned long> sellBaseCycles (const std::map <std::string, cgroup::VMInfo> & vms, unsigned long & all, std::map <std::string, unsigned long> & needs) const;
-	
-	
-	/**
-	 * Increment the accounts of the running VMs
-	 */
-	void incrementAccounts (const std::map <std::string, cgroup::VMInfo> & vms);
-	
+	std::map <std::string, unsigned long> sellBaseCycles (const std::map <std::string, cgroup::VMInfo> & vms, unsigned long & market,  std::map <std::string, unsigned long> & buyers);
+	       	
     };
     
 }

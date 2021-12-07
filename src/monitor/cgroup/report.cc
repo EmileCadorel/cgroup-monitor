@@ -25,7 +25,7 @@ namespace monitor {
 	    
 	    res.insert ("accounts", new utils::config::dict (accounts));
 	    res.insert ("nb-iteration-f", new long (market.getFirstNbIterations ()));
-	    res.insert ("nb-iteration-s", new long (market.getSecondNbIterations ()));
+	    res.insert ("nb-iteration-s", new long (market.getSecondNbIterations ())); // not relevant
 	    res.insert ("nb-sold-f", new long (market.getFirstMarketSold ()));
 	    res.insert ("nb-lost", new long (market.getLost ()));
 	    
