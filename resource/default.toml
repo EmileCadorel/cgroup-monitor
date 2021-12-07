@@ -1,0 +1,16 @@
+[monitor]
+addr = "127.0.0.1:8081"
+tick = 1.0
+format = "json"
+
+[market]
+market-increment = 1.2
+cycle-price = 1.0
+cycle-increment = 0.01
+base-cycle = 0.01
+window-scale = 0.1
+money-increment = 0.3
+trigger-increment = 85.0
+window-size = 100000
+window-multiplier = 5
+max-window-turn = 10

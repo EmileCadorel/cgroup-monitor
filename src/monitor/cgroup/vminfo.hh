@@ -1,0 +1,153 @@
+#pragma once
+
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <vector>
+#include <monitor/concurrency/timer.hh>
+
+#include <monitor/cgroup/info.hh>
+
+namespace monitor {
+    namespace cgroup {
+
+	class VMInfo {
+
+	    /// The name of the group
+	    std::string _name;
+
+	    /// The path of the group
+	    std::filesystem::path _path;
+
+	    /// The consumption in the last tick
+	    unsigned long _lastConso;
+	    
+	    /// The cpu consumption of the group in microsecond
+	    unsigned long _conso;
+
+	    /// The cpu capping of the group in microsecond (-1 if uncapped)
+	    long _cap; 
+
+	    /// The period of the group in microsecond
+	    unsigned long _period;
+
+	    /// The delta time in second between the two last ticks
+	    float _delta;
+
+	    /// The timer that compute the frame durations
+	    concurrency::timer _t;
+	    
+	    /// The cgroup of the vcpus
+	    std::vector <GroupInfo> _vcpus;
+	    
+	public:
+
+	    /**
+	     * Create a new cgroup from a path
+	     * @params: 
+	     *  - path: the path of the cgroup in the file system (e.g. /sys/fs/cgroup/my_group)
+	     */
+	    VMInfo (const std::filesystem::path & path);	    
+
+	    /**
+	     * @returns: the path of the cgroup
+	     */
+	    const std::filesystem::path & getPath () const;
+
+	    /**
+	     * @returns: the maximal number of microseconds that can be consumed by the VM in one second
+	     */
+	    unsigned long getMaximumConso () const;
+
+	    /**
+	     * @returns: the number of microseconds that are consumed by the VM relate to the delta duration of the last tick
+	     */
+	    unsigned long getAbsoluteConso () const;
+
+	    /**
+	     * @returns: the number of microseconds authorized for the VM in the current second
+	     */
+	    unsigned long getAbsoluteCapping () const;
+	    
+
+	    /**
+	     * @returns: the percentage consumption of the last tick
+	     */
+	    float getPercentageConso () const;
+
+	    /**
+	     * @returns: the percentage of consumption of the last tick in comparison to the capping
+	     */
+	    float getRelativePercentConso () const;
+	    
+	    /**
+	     * @returns: the name of the cgroup
+	     */
+	    const std::string & getName () const;
+
+	    /**
+	     * @returns: the cpu conso (in microsecond) 
+	     */
+	    unsigned long getConso () const;
+
+	    /**
+	     * @returns: the cpu capping (in microsecond) -1 if not capped
+	     */
+	    long getCapping () const;
+
+	    /**
+	     * @returns: the cpu period, that rules the cgroup capping policy in microsec
+	     */
+	    unsigned long getPeriod () const;
+
+	    /**
+	     * @returns: the number of vcpus of the machine
+	     */
+	    unsigned long getNbVCpus () const;
+	    
+	    /**
+	     * @returns: the list of vcpus cgroup of the machine
+	     */
+	    const std::vector <GroupInfo> & getVCpus () const;
+	    
+	    /**
+	     * Update the information about the group (read this in the filesystem)
+	     * @params: 
+	     *   - delta: the elapsed time since last tick in second
+	     */
+	    void update ();
+
+	    /**
+	     * Apply the capping on a vm
+	     * @params:
+	     *  - nbCycle: the number of authorized cycles for the VM in microseconds that does taking into account the period
+	     */
+	    void applyCapping (unsigned long nbCycle);
+	    
+	private: 
+	    
+	    /**
+	     * Read the cpu consumption of the cgroup from the sys file
+	     * @returns: the consumption in microsecond
+	     */
+	    unsigned long readConso () const;
+
+	    /**
+	     * Read the cpu capping of the cgroup from the sys file
+	     * @returns: the maximum number of microsecond of cpu allocation in the time period (-1 if uncapped)
+	     */
+	    long readCap () const;
+
+	    /**
+	     * Read the cpu period, that rules the cgroup capping policy 
+	     * @returns: the period in microsecond
+	     */
+	    unsigned long readPeriod () const;	    
+	    
+	};
+	
+    }
+}
+
+
+std::ostream & operator<< (std::ostream & s, const monitor::cgroup::VMInfo & info);
