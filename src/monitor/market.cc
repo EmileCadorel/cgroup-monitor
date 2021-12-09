@@ -14,7 +14,8 @@ namespace monitor {
 	this-> _config = MarketConfig {
 	    0.3,
 	    0.95,
-	    0.9,
+	    0.5,
+	    0.1,
 	    10000
 	};
     }
@@ -56,9 +57,10 @@ namespace monitor {
 	// Rest some cycle that have not been sold, so there is some room for optimization	
 	if (market > 0) {
 	    long allSold = market;
+	    long rest = std::min (allNeeded, market);
 	    for (auto & v : buyers) { // we split the rest of the market between all the VMs that failed to buy
 		float percent = (float) (v.second) / (float) allNeeded; // Implication of the VMs in the market 
-		unsigned long add = (unsigned long) (percent * market);
+		unsigned long add = (unsigned long) (percent * rest);
 		allocated [v.first] += add;
 		allSold -= add;	   
 	    }
@@ -122,62 +124,67 @@ namespace monitor {
     {
 	std::map <std::string, unsigned long> allocated;
 	for (auto & v : vms) {
-	    auto usage = v.second.getAbsoluteConso ();
-	    auto nominal = this-> _config.baseCycle * v.second.getMaximumConso ();
-	    auto max = v.second.getMaximumConso ();
-	    auto perc_usage = v.second.getRelativePercentConso ();
+	    unsigned long usage = v.second.getAbsoluteConso ();
+	    unsigned long nominal = this-> _config.baseCycle * v.second.getMaximumConso ();
+	    unsigned long max = v.second.getMaximumConso ();
+	    float perc_usage = v.second.getRelativePercentConso () / 100.0;
+	    unsigned long capp = v.second.getAbsoluteCapping ();
+	    logging::info (v.first, "usage:", usage, "nominal:", nominal, "max:", max, "perc:", perc_usage, "cap:", capp, "div:", (float)usage/(float)capp);
+	    /// If The VM usage is lower than the nominal frequency, we give some money
+	    if (usage < nominal) {
+		this-> increaseMoney (v.first, nominal - usage);		
+	    } else this-> increaseMoney (v.first, 0);
 	    
 	    /**
 	     * We have three cases : 
-	     *  - 1) The VM uses less than nominal frequency, and less than trigger, in that case we give it some money, and set the capping to the current capping - decreasing
+	     *  - 1) The VMs uses less than the decrease trigger
 	     */
-	    if (usage < nominal && perc_usage < this-> _config.triggerIncrement) {
-		auto money = nominal - usage;
-		unsigned long cap = usage + (1.0 - this-> _config.triggerIncrement) * max;
-		unsigned long decrease = v.second.getAbsoluteCapping () * this-> _config.decreasingSpeed;
+	    if (perc_usage < this-> _config.triggerDecrement) {
+		/// We decrease the speed of the VM by a bit 
+		unsigned long decrease = capp * (1.0 - this-> _config.decreasingSpeed);
+		unsigned long current = std::min (nominal, decrease);
+		logging::info (v.first, "Less:", decrease, " ", capp, " ", current, " ", nominal);
+		allocated [v.first] = current;
+		market -= current;
+
+		/// If the VM needs more than nominal, we add it to the buyers for bidding
+		if (usage > nominal) buyers [v.first] = std::min (max - nominal, decrease - nominal);
+	    }
+
+	    /**
+	     *   - 2) The VM usage is higher than the increase trigger
+	     */
+	    else if (perc_usage > this-> _config.triggerIncrement) {
+		logging::info (v.first, "Upper");
+		/// We set the speed of the VM to full capacity
 		
-		allocated [v.first] = std::max (cap, decrease);
-		market -= cap;
-		auto fnd = this-> _accounts.find (v.first);
-		if (fnd == this-> _accounts.end ()) {
-		    this-> _accounts [v.first] = money;
-		} else {
-		    fnd-> second = fnd-> second + money;
-		}
-	    }
-	    /*
-	     *  - 2) The VM uses more than nominal, and less than trigger, in that case we give no money, cap to nominal, and set the needs at the current capping - decreasing
-	     */
-	    else if (usage >= nominal && perc_usage < this-> _config.triggerIncrement) {
-		unsigned long cap = usage + (1.0 - this-> _config.triggerIncrement) * max;
-		unsigned long decrease = v.second.getAbsoluteCapping () * this-> _config.decreasingSpeed;
-		buyers [v.first] = std::max (cap, decrease) - nominal;
-		allocated [v.first] = nominal;
-		market -= nominal;
-		auto fnd = this-> _accounts.find (v.first);
-		if (fnd == this-> _accounts.end ()) {
-		    this-> _accounts [v.first] = 0;
-		}
-	    }
-	    
-	    /*
-	     *  - 3) The VM uses more than nominal, and more than trigger, in that case we give no money, cap to nominal, and set the needs to maximum consumption. 
-	     */
-	    else {
 		auto cap = max;
 		buyers [v.first] = cap - nominal;
 		allocated [v.first] = nominal;
 		market -= nominal;
-		auto fnd = this-> _accounts.find (v.first);
-		if (fnd == this-> _accounts.end ()) {
-		    this-> _accounts [v.first] = 0;
-		}
 	    }
 
+	    /**
+	     *   - 3) The VM usage is between the two triggers
+	     */
+	    else {
+		logging::info (v.first, "None");
+	    	/// We do nothing ?
+	    }	    
 	}
 
 	return allocated;
     }
+
+    void Market::increaseMoney (const std::string & vmName, unsigned long money) {
+	auto fnd = this-> _accounts.find (vmName);
+	if (fnd == this-> _accounts.end ()) {
+	    this-> _accounts [vmName] = money;
+	} else {
+	    fnd-> second = fnd-> second + money;
+	}
+    }
+    
 
     /**
      * ================================================================================

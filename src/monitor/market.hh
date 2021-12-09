@@ -10,6 +10,7 @@ namespace monitor {
     struct MarketConfig {
 	float baseCycle;
 	float triggerIncrement;
+	float triggerDecrement;
 	float decreasingSpeed;
 	unsigned long windowSize;
     };
@@ -117,7 +118,18 @@ namespace monitor {
 	 *   - update this-> _accounts, by adding the base money of this current monitor loop and removing the money of the base selling
 	 */
 	std::map <std::string, unsigned long> sellBaseCycles (const std::map <std::string, cgroup::VMInfo> & vms, unsigned long & market,  std::map <std::string, unsigned long> & buyers);
-	       	
+
+
+	/**
+	 * Increase the money of a given vm
+	 * @params: 
+	 *    - vmName: the name of the vm
+	 *    - amount: the amount of money to add
+	 * @side_effects: 
+	 *  	 *   - update this-> _accounts
+	 */
+	void increaseMoney (const std::string & vm, unsigned long amount);
+	
     };
     
 }

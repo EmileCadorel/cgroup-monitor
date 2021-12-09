@@ -29,7 +29,8 @@ namespace monitor {
 		MarketConfig c;
 		c.baseCycle = mark.getOr<float> ("base-cycle", 30.0) / 100.0;
 		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0) / 100.0;
-		c.triggerIncrement = mark.getOr<float> ("decrease-speed", 90.0) / 100.0;
+		c.triggerDecrement = mark.getOr<float> ("trigger-decrement", 50.0) / 100.0;
+		c.decreasingSpeed = mark.getOr<float> ("decreasing-speed", 10.0) / 100.0;
 		c.windowSize = mark.getOr<int> ("window-size", 10000);
 
 		this-> _market = Market (c);
