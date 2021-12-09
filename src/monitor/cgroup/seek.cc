@@ -27,8 +27,9 @@ namespace monitor {
 	    if (cfg.has <utils::config::dict> ("market")) {
 		auto mark = cfg.get <utils::config::dict> ("market");
 		MarketConfig c;
-		c.baseCycle = mark.getOr<float> ("base-cycle", 0.3);
-		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0);
+		c.baseCycle = mark.getOr<float> ("base-cycle", 30.0) / 100.0;
+		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0) / 100.0;
+		c.triggerIncrement = mark.getOr<float> ("decrease-speed", 90.0) / 100.0;
 		c.windowSize = mark.getOr<int> ("window-size", 10000);
 
 		this-> _market = Market (c);

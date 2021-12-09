@@ -10,6 +10,7 @@ namespace monitor {
     struct MarketConfig {
 	float baseCycle;
 	float triggerIncrement;
+	float decreasingSpeed;
 	unsigned long windowSize;
     };
     

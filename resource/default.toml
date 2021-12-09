@@ -6,4 +6,5 @@ format = "json"
 [market]
 base-cycle = 0.3
 trigger-increment = 95.0
+decreasing-speed = 90.0
 window-size = 100000

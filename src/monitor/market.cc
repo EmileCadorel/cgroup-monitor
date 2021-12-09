@@ -14,6 +14,7 @@ namespace monitor {
 	this-> _config = MarketConfig {
 	    0.3,
 	    0.95,
+	    0.9,
 	    10000
 	};
     }
@@ -128,13 +129,14 @@ namespace monitor {
 	    
 	    /**
 	     * We have three cases : 
-	     *  - 1) The VM uses less than nominal frequency, and less than trigger, in that case we give it some money, and set the capping to the current usage + a bit more to avoid trigger at the next market-iteration. 
+	     *  - 1) The VM uses less than nominal frequency, and less than trigger, in that case we give it some money, and set the capping to the current capping - decreasing
 	     */
 	    if (usage < nominal && perc_usage < this-> _config.triggerIncrement) {
 		auto money = nominal - usage;
-		auto cap = usage + ((100.0 - this-> _config.triggerIncrement) / 100.0) * max;
+		unsigned long cap = usage + (1.0 - this-> _config.triggerIncrement) * max;
+		unsigned long decrease = v.second.getAbsoluteCapping () * this-> _config.decreasingSpeed;
 		
-		allocated [v.first] = cap;
+		allocated [v.first] = std::max (cap, decrease);
 		market -= cap;
 		auto fnd = this-> _accounts.find (v.first);
 		if (fnd == this-> _accounts.end ()) {
@@ -144,11 +146,12 @@ namespace monitor {
 		}
 	    }
 	    /*
-	     *  - 2) The VM uses more than nominal, and less than trigger, in that case we give no money, cap to nominal, and set the needs at the current usage + a bit more to avoid trigger at the next market-iteration. 
+	     *  - 2) The VM uses more than nominal, and less than trigger, in that case we give no money, cap to nominal, and set the needs at the current capping - decreasing
 	     */
 	    else if (usage >= nominal && perc_usage < this-> _config.triggerIncrement) {
-		auto cap = usage + ((100.0 - this-> _config.triggerIncrement) / 100.0) * max;
-		buyers [v.first] = cap - nominal;
+		unsigned long cap = usage + (1.0 - this-> _config.triggerIncrement) * max;
+		unsigned long decrease = v.second.getAbsoluteCapping () * this-> _config.decreasingSpeed;
+		buyers [v.first] = std::max (cap, decrease) - nominal;
 		allocated [v.first] = nominal;
 		market -= nominal;
 		auto fnd = this-> _accounts.find (v.first);
