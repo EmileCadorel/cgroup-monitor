@@ -6,19 +6,41 @@
 namespace fs = std::filesystem;
 using namespace monitor::utils;
 
+template<typename T>
+void pop_front(std::vector<T>& vec)
+{
+    vec.erase(vec.begin());
+}
+
+
 namespace monitor {
     namespace cgroup {
 
-	VMInfo::VMInfo (const fs::path & path) :
+	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen) :
 	    _path (path),
 	    _name (path.filename ()),
 	    _conso (0),
 	    _cap (0),
-	    _period (0)
+	    _period (0),
+	    _maxhistory (historyLen)
 	{
 	    this-> _t.reset ();
 	    this-> update ();
 	    this-> _lastConso = this-> _conso;
+	    this-> _cap = -1;
+	    this-> _period = this-> readPeriod ();
+	    
+	    int i = 0;
+	    while (true) {
+		std::stringstream ss;
+		ss << "vcpu" << i;
+		if (fs::exists (this-> _path / ss.str ())) {
+		    this-> _vcpus.push_back (GroupInfo (this-> _path / ss.str ()));
+		} else break;
+		i += 1;
+	    }
+	    auto p = this-> _path / "cpuacct.usage";
+	    this-> _consoStream = std::ifstream (p); 	    
 	}
 
 
@@ -59,6 +81,10 @@ namespace monitor {
 	    return this-> _cap;
 	}
 
+	double VMInfo::getSlope () const {
+	    return this-> _slope;
+	}
+
 	unsigned long VMInfo::getPeriod () const {
 	    return this-> _period;
 	}
@@ -83,48 +109,58 @@ namespace monitor {
 	}
 
 	
-	void VMInfo::update () {	    
+	bool VMInfo::update () {	    
 	    this-> _lastConso = this-> _conso;
+	    bool read = false;
+	    this-> _conso = this-> readConso (read) / 1000;
 	    this-> _delta = this-> _t.time_since_start ();
 	    this-> _t.reset ();
-	    this-> _conso = this-> readConso () / 1000;
-	    
-	    this-> _cap = this-> readCap ();
-	    this-> _period = this-> readPeriod ();
 
+	    this-> _history.push_back (this-> getPercentageConso ());
+	    if (this-> _history.size () > this-> _maxhistory) {
+		pop_front (this-> _history);
+	    }
+
+	    this-> _slope = this-> computeSlope (this-> _history);
+	    
 	    if (this-> _cap != -1 && this-> getAbsoluteConso () > this-> getAbsoluteCapping ()) {
-		logging::strange ("Capping is not respected for VM :", this-> _name, this-> getAbsoluteConso (), this-> getAbsoluteCapping (), this-> _delta);
+		logging::strange ("Capping is not respected for VM :", this-> _name, this-> getAbsoluteConso (), this-> getAbsoluteCapping (), this-> _delta, this-> getRelativePercentConso ());
 	    }
 	    
-	    if (this-> _vcpus.size () == 0) {
-		int i = 0;
-		while (true) {
-		    std::stringstream ss;
-		    ss << "vcpu" << i;
-		    if (fs::exists (this-> _path / ss.str ())) {
-			this-> _vcpus.push_back (GroupInfo (this-> _path / ss.str ()));
-		    } else break;
-		    i += 1;
-		}
-	    } else {
-		for (int i = 0 ; i < this-> _vcpus.size () ; i++) {
-		    this-> _vcpus [i].update (this-> _delta);
-		}
+	    return read;
+	}
+
+	double VMInfo::computeSlope (const std::vector <double> & values) const {
+	    if (values.size () != this-> _maxhistory ) return values.size ();
+	    double sum_x = 0;
+	    double sum_y = 0;
+	    
+	    for (int x = 0 ; x < values.size () ; x++) {
+		sum_y += values [x];
+		sum_x += x;
 	    }
+	    auto m_x = sum_x / (double) (values.size ());
+	    auto m_y = sum_y / (double) (values.size ());
+	    double ss_x = 0.0, sp = 0.0;
+	    for (int x = 0 ; x < values.size () ; x++) {
+		ss_x += (x - m_x) * (x - m_x);
+		sp += (x - m_x) * (values [x] - m_y);
+	    }
+
+	    std::cout << this-> _name << " " << ss_x << " " << sp << " " << sp / ss_x << std::endl;
+	    return sp/ss_x;
 	}
 	
 	
-	unsigned long VMInfo::readConso () const {
+	unsigned long VMInfo::readConso (bool & read) {
 	    unsigned long res = 0;
 	    auto p = this-> _path / "cpuacct.usage";
-	    
-	    if (fs::exists (p)) {
-		std::ifstream t (p);
-		std::stringstream buffer;
-		buffer << t.rdbuf();
-		buffer >> res;
-	    }
-
+	    std::ifstream t (p);
+	    read = t.good ();
+	    std::stringstream buffer;
+	    buffer << t.rdbuf();
+	    buffer >> res;
+	    	    
 	    return res;
 	}
 

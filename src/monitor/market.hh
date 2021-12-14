@@ -11,6 +11,7 @@ namespace monitor {
 	float baseCycle;
 	float triggerIncrement;
 	float triggerDecrement;
+	float increasingSpeed;
 	float decreasingSpeed;
 	unsigned long windowSize;
     };

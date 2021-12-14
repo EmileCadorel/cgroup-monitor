@@ -54,6 +54,8 @@ namespace monitor {
 	    /// The format of the reports
 	    std::string _format;
 
+	    unsigned long _vmHistory;
+	    
 	public :
 
 	    /**
@@ -106,15 +108,18 @@ namespace monitor {
 	     */
 	    void update ();
 
+
+	    void fullupdate ();
+
 	    /**
 	     * Resursively read the filesystem directory to get all available cgroups
 	     */
-	    void recursiveUpdate (const std::filesystem::path & current, std::map <std::string, GroupInfo> & result, std::map <std::string, VMInfo> & vmRes);
+	    void recursiveUpdate (const std::filesystem::path & current);
 
 	    /**
 	     * Create a VMInfo from a path
 	     */
-	    VMInfo updateVM (const std::filesystem::path & path);
+	    void updateVM (const std::filesystem::path & path);
 
 	    /**
 	     * Wait the correct amount of time, to respect the durations between to frames

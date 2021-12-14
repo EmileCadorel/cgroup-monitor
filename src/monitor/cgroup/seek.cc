@@ -21,6 +21,7 @@ namespace monitor {
 	    auto inner = cfg.get <utils::config::dict> ("monitor");
 	    this-> _addr = net::SockAddrV4 (inner.get<std::string> ("addr"));
 	    this-> _frameDur = inner.get <float> ("tick");
+	    this-> _vmHistory = inner.get <float> ("slope-history");
 	    this-> _frameDurMicro = (long) (this-> _frameDur * 1000000);
 	    this-> _format = inner.get <std::string> ("format");
 
@@ -31,6 +32,7 @@ namespace monitor {
 		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0) / 100.0;
 		c.triggerDecrement = mark.getOr<float> ("trigger-decrement", 50.0) / 100.0;
 		c.decreasingSpeed = mark.getOr<float> ("decreasing-speed", 10.0) / 100.0;
+		c.increasingSpeed = mark.getOr<float> ("increasing-speed", 10.0) / 100.0;
 		c.windowSize = mark.getOr<int> ("window-size", 10000);
 
 		this-> _market = Market (c);
@@ -43,14 +45,22 @@ namespace monitor {
 
 	void GroupManager::run () {	    
 	    this-> _th = concurrency::spawn (this, &GroupManager::tcpLoop);
+	    int nb_turn = 0;
 	    while (true) {
-		this-> update ();
 		auto s = std::chrono::system_clock::now ();
+		if (nb_turn % 60 == 0) {
+		    nb_turn = 0;
+		    this-> fullupdate ();
+		} else {
+		    this-> update ();
+		}
+		nb_turn ++;
+		
 		if (this-> _withMarket) { // The monitor can run without market to make comparison with no capping easily
 		    auto result = this-> _market.update (this-> _vms);
 		    this-> applyResult (result);
 		}
-		auto e = std::chrono::system_clock::now ();		
+		auto e = std::chrono::system_clock::now ();
 		
 		this-> sendReports (e - s);
 		this-> waitFrame ();
@@ -70,53 +80,49 @@ namespace monitor {
 	}
 	
 	void GroupManager::waitFrame () {
-	    auto r = this-> _frameDur - this-> _t.time_since_start ();
 	    auto s = std::chrono::system_clock::now ();
+	    auto r = this-> _frameDur - this-> _t.time_since_start ();
 	    this-> _t.sleep (r);
 	    auto e = std::chrono::system_clock::now ();
-	    this-> _t.reset ((e - s));
+	    this-> _t.reset (e, (e - s));
+	}
+
+	void GroupManager::fullupdate () {
+	    std::string path = "/sys/fs/cgroup/cpu/machine.slice";
+	    //this-> _vms.clear ();
+	    this-> recursiveUpdate (fs::path (path));
 	}
 	
 	void GroupManager::update () {
-	    std::string path = "/sys/fs/cgroup/cpu";
-	    std::map <std::string, GroupInfo> result;
-	    std::map <std::string, VMInfo> vmResult;
-	    
-	    this-> recursiveUpdate (fs::path (path), result, vmResult);
-	    this-> _groups = result;
-	    this-> _vms = vmResult;
-	}
-
-	void GroupManager::recursiveUpdate (const fs::path & path, std::map <std::string, GroupInfo> & result, std::map <std::string, VMInfo> & vmRes) {
-	    if (path.u8string ().find("machine-qemu") != std::string::npos) {
-		auto info = this-> updateVM (path);
-		vmRes.emplace (path.filename (), info);
-	    } else {	    
-		if (fs::exists (path / "cpu.cfs_quota_us")) {
-		    auto it = this-> _groups.find (path.filename ());
-		    if (it != this-> _groups.end ()) {
-			it-> second.update (this-> _frameDur);
-			result.emplace (path.filename (), it-> second);
-		    } else {
-			result.emplace  (path.filename (), GroupInfo (path));
-		    }
-		}
-	    
-		for (const auto & entry : fs::directory_iterator(path)) {
-		    if (fs::is_directory (entry.path ())) {
-			this-> recursiveUpdate (fs::path (entry.path ()), result, vmRes);
-		    }
+	    for (auto v = this-> _vms.begin () ; v != this-> _vms.end () ; ) { 
+		if (!v-> second.update ()) {
+		    this-> _vms.erase (v ++);
+		} else {
+		    v ++;
 		}
 	    }
 	}
 
-	VMInfo GroupManager::updateVM (const fs::path & path) {
-	    auto it = this-> _vms.find (path.filename ());
-	    if (it != this-> _vms.end ()) {
-		it-> second.update ();
-		return it-> second;
+	void GroupManager::recursiveUpdate (const fs::path & path) {
+	    if (fs::is_directory (path)) {
+		if (path.u8string ().find("machine-qemu") != std::string::npos) {
+		    this-> updateVM (path);
+		} else {
+		    for (const auto & entry : fs::directory_iterator(path)) {
+			if (fs::is_directory (entry.path ())) {
+			    this-> recursiveUpdate (fs::path (entry.path ()));
+			}
+		    }	    
+		}
+	    }
+	}
+
+	void GroupManager::updateVM (const fs::path & path) {
+	    auto fnd = this-> _vms.find (path.filename ());
+	    if (fnd != this-> _vms.end ()) {
+		fnd-> second.update ();
 	    } else {
-		return VMInfo {path};
+		this-> _vms.emplace (path.filename (), VMInfo {path, this-> _vmHistory});
 	    }
 	}
 
@@ -134,7 +140,7 @@ namespace monitor {
 	    if (this-> _clients.size () != 0) {
 		this-> _mutex.unlock ();
 		Report report (*this, diff.count ());
-		auto str = report.str (this-> _format) + "\n";
+		auto & str = report.str ();
 	    
 		std::vector <net::TcpStream> nclients;
 		this-> _mutex.lock ();

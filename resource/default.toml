@@ -1,11 +1,13 @@
 [monitor]
-addr = "127.0.0.1:8080"
+addr = "127.0.0.1:8081"
 tick = 1.0
 format = "json"
+slope-history = 5
 
 [market]
 base-cycle = 30.0
 trigger-increment = 95.0
 trigger-decrement = 50.0
-decreasing-speed = 50.0
+decreasing-speed = 20.0
+increasing-speed = 100.0	
 window-size = 100000

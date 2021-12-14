@@ -5,10 +5,10 @@
 #include <filesystem>
 #include <vector>
 #include <monitor/concurrency/timer.hh>
-
+#include <fstream>
 #include <monitor/cgroup/info.hh>
 
-namespace monitor {
+namespace monitor {       
     namespace cgroup {
 
 	class VMInfo {
@@ -39,6 +39,15 @@ namespace monitor {
 	    
 	    /// The cgroup of the vcpus
 	    std::vector <GroupInfo> _vcpus;
+
+	    std::ifstream _consoStream;
+
+	    /// the history of consumption of the VM
+	    std::vector <double> _history;
+
+	    unsigned long _maxhistory;
+
+	    double _slope;
 	    
 	public:
 
@@ -47,7 +56,7 @@ namespace monitor {
 	     * @params: 
 	     *  - path: the path of the cgroup in the file system (e.g. /sys/fs/cgroup/my_group)
 	     */
-	    VMInfo (const std::filesystem::path & path);	    
+	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory);	    
 
 	    /**
 	     * @returns: the path of the cgroup
@@ -96,6 +105,11 @@ namespace monitor {
 	    long getCapping () const;
 
 	    /**
+	     * @returns: the coeff of the curve of the consumption
+	     */
+	    double getSlope () const;
+	    
+	    /**
 	     * @returns: the cpu period, that rules the cgroup capping policy in microsec
 	     */
 	    unsigned long getPeriod () const;
@@ -115,7 +129,7 @@ namespace monitor {
 	     * @params: 
 	     *   - delta: the elapsed time since last tick in second
 	     */
-	    void update ();
+	    bool update ();
 
 	    /**
 	     * Apply the capping on a vm
@@ -130,7 +144,7 @@ namespace monitor {
 	     * Read the cpu consumption of the cgroup from the sys file
 	     * @returns: the consumption in microsecond
 	     */
-	    unsigned long readConso () const;
+	    unsigned long readConso (bool &);
 
 	    /**
 	     * Read the cpu capping of the cgroup from the sys file
@@ -143,9 +157,12 @@ namespace monitor {
 	     * @returns: the period in microsecond
 	     */
 	    unsigned long readPeriod () const;	    
+
+	    double computeSlope (const std::vector <double> & v) const;
 	    
 	};
-	
+
+
     }
 }
 

@@ -10,57 +10,57 @@ namespace monitor {
     namespace cgroup {
 
 	Report::Report (const GroupManager & manager, float time) {
-
-	    this-> reportVMs (manager.getVms ());
-	    this-> reportMarket (manager.getMarket ());
-	    this-> _content.insert ("time", new std::string (utils::logging::get_time ()));
-	    this-> _content.insert ("duration", new float (time));
+	    std::stringstream s;
+	    s << "{ \"time\" : \"" << utils::logging::get_time () << "\", \"duration\" : " << time << ", ";
+	    this-> reportMarket (s, manager.getMarket ());
+	    s << ", ";
+	    this-> reportVMs (s, manager.getVms ());
+	    s << "}" << std::endl;
+	    this-> _content = s.str ();
 	}
 
-	void Report::reportMarket (const Market & market) {
-	    utils::config::dict accounts, res;
+	void Report::reportMarket (std::stringstream & s, const Market & market) {
+	    s << "\"market\" : ";
+	    s << "{ \"accounts\" : { ";
+	    int i = 0;
 	    for (auto & it : market.getAccounts ()) {
-		accounts.insert (it.first, new long (it.second));
+		if (i != 0) s << ", ";
+		s << "\"" << it.first << "\" : " << it.second;
+		i += 1;
 	    }
-	    
-	    res.insert ("accounts", new utils::config::dict (accounts));
-	    res.insert ("nb-iteration-f", new long (market.getFirstNbIterations ()));
-	    res.insert ("nb-iteration-s", new long (market.getSecondNbIterations ())); // not relevant
-	    res.insert ("nb-sold-f", new long (market.getFirstMarketSold ()));
-	    res.insert ("nb-lost", new long (market.getLost ()));
-	    
-	    this-> _content.insert ("market", new utils::config::dict (res));
+	    s << "}, "; // accounts
+	    s << "\"nb-iteration-f\" : " << market.getFirstNbIterations () << ", ";
+	    s << "\"nb-iteration-s\" : " << market.getSecondNbIterations () << ", ";
+	    s << "\"nb-sold-f\" : " << market.getFirstMarketSold () << ", ";
+	    s << "\"nb-lost\" : " << market.getFirstMarketSold () << "}";
 	}
 
 	
-	void Report::reportVMs (const std::map <std::string, VMInfo> & vms) {
-	    utils::config::dict res;
+	void Report::reportVMs (std::stringstream & s, const std::map <std::string, VMInfo> & vms) {
+	    s << "\"vms\" : {";
+	    int i = 0;
 	    for (auto & it : vms) {
-		res.insert (it.first, new utils::config::dict (this-> vmToDict (it.first, it.second)));
+		if (i != 0) s << ", ";
+		s << "\"" << it.first << "\" : ";
+		this-> vmToDict (s, it.first, it.second);
+		i += 1;
 	    }
-
-	    this-> _content.insert ("vms", new utils::config::dict (res));
+	    s << "}";
 	}
 
-	utils::config::dict Report::vmToDict (const std::string & name, const VMInfo & info) const {
-	    utils::config::dict res;
-	    res.insert ("name", new std::string (name));
-	    res.insert ("conso_cycle", new long (info.getAbsoluteConso ()));
-	    res.insert ("host_usage", new long (info.getPercentageConso ()));
-	    res.insert ("relative_usage", new long (info.getRelativePercentConso ()));
-	    res.insert ("capping", new long (info.getCapping ()));
-	    res.insert ("period", new long (info.getPeriod ()));
-	    res.insert ("vcpus", new long (info.getVCpus ().size ()));
-
-	    return res;
+	void Report::vmToDict (std::stringstream & s, const std::string & name, const VMInfo & info) const {
+	    s << "{ \"name\" : \"" << name << "\", ";
+	    s << "\"conso_cycle\" : " << info.getAbsoluteConso () << ", ";
+	    s << "\"host_usage\" : " << info.getPercentageConso () << ", ";
+	    s << "\"relative_usage\" : " << info.getRelativePercentConso () << ", ";
+	    s << "\"capping\" : " << info.getCapping () << ", ";
+	    s << "\"period\" : " << info.getPeriod () << ", ";
+	    s << "\"vcpus\" : " << info.getVCpus ().size () << ", ";
+	    s << "\"slope\" : " << info.getSlope () << " }";
 	}
 
-	std::string Report::str (const std::string & format) const {
-	    if (format == "json") {
-		return utils::json::dump (this-> _content);
-	    } else {
-		return utils::toml::dump (this-> _content);
-	    }
+	const std::string & Report::str () const {
+	    return this-> _content;
 	}
 	
     }

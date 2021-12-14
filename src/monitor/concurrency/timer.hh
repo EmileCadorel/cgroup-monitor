@@ -18,7 +18,7 @@ namespace monitor {
 	    /**
 	     * restart the timer
 	     */
-	    void reset (std::chrono::duration<double> since) ;
+	    void reset (std::chrono::system_clock::time_point, std::chrono::duration<double> since) ;
 
 	    /**
 	     * restart the timer

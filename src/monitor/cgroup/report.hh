@@ -2,6 +2,7 @@
 
 #include <monitor/cgroup/seek.hh>
 #include <monitor/utils/config.hh>
+#include <sstream>
 
 namespace monitor {
 
@@ -9,7 +10,7 @@ namespace monitor {
 
 	class Report {
 
-	    utils::config::dict _content;
+	    std::string _content;
 	    
 	public:
 
@@ -17,10 +18,8 @@ namespace monitor {
 
 	    /**
 	     * Convert the report into a string
-	     * @params:
-	     * - format: the format of the report (json, toml)
 	     */
-	    std::string str (const std::string & format) const;
+	    const std::string & str () const;
 
 
 	private:
@@ -28,17 +27,17 @@ namespace monitor {
 	    /**
 	     * Transform the market into a report (in this-> _content ["market"])
 	     */
-	    void reportMarket (const Market & market);
+	    void reportMarket (std::stringstream & s, const Market & market);
 	    
 	    /**
 	     * Transform the vms infos into a report (in this-> _content ["vms"])
 	     */
-	    void reportVMs (const std::map <std::string, VMInfo> & vms);
+	    void reportVMs (std::stringstream & s, const std::map <std::string, VMInfo> & vms);
 
 	    /**
-	     * Transform a vminfo into a dict
+	     * Transform a vminfo into
 	     */
-	    utils::config::dict vmToDict (const std::string & name, const VMInfo & info) const;
+	    void vmToDict (std::stringstream & s, const std::string & name, const VMInfo & info) const;
 
 	    
 	};	

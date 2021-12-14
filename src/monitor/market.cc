@@ -16,6 +16,7 @@ namespace monitor {
 	    0.95,
 	    0.5,
 	    0.1,
+	    0.1,
 	    10000
 	};
     }
@@ -50,22 +51,22 @@ namespace monitor {
 	/// Run the auction, for the VMs that needs more cycles than the nominal
 	unsigned long allNeeded = 0;
 	this-> buyCycles (vms, allocated, buyers, market, this-> _firstIteration, allNeeded);
-
+	
 	/// Compute the number of cycles that are sold since the beginning, for debugging infos
 	this-> _firstMarket = (get_nprocs () * 1000000) - market;
 
 	// Rest some cycle that have not been sold, so there is some room for optimization	
 	if (market > 0) {
-	    long allSold = market;
+	    long notSold = market;
 	    long rest = std::min (allNeeded, market);
 	    for (auto & v : buyers) { // we split the rest of the market between all the VMs that failed to buy
 		float percent = (float) (v.second) / (float) allNeeded; // Implication of the VMs in the market 
 		unsigned long add = (unsigned long) (percent * rest);
 		allocated [v.first] += add;
-		allSold -= add;	   
+		notSold -= add;	   
 	    }
 	    
-	    this-> _lost = allSold;
+	    this-> _lost = notSold;
 	} else this-> _lost = 0;
 
 	return allocated;
@@ -129,47 +130,74 @@ namespace monitor {
 	    unsigned long max = v.second.getMaximumConso ();
 	    float perc_usage = v.second.getRelativePercentConso () / 100.0;
 	    unsigned long capp = v.second.getAbsoluteCapping ();
-	    logging::info (v.first, "usage:", usage, "nominal:", nominal, "max:", max, "perc:", perc_usage, "cap:", capp, "div:", (float)usage/(float)capp);
-	    /// If The VM usage is lower than the nominal frequency, we give some money
-	    if (usage < nominal) {
-		this-> increaseMoney (v.first, nominal - usage);		
-	    } else this-> increaseMoney (v.first, 0);
-	    
-	    /**
+	    double slope = v.second.getSlope ();	    
+
+	    if (v.second.getCapping() == -1) capp = nominal;
+ 	    /**
 	     * We have three cases : 
 	     *  - 1) The VMs uses less than the decrease trigger
 	     */
-	    if (perc_usage < this-> _config.triggerDecrement) {
+	    if (perc_usage < this-> _config.triggerDecrement && slope < -0.1f) {
 		/// We decrease the speed of the VM by a bit 
 		unsigned long decrease = capp * (1.0 - this-> _config.decreasingSpeed);
 		unsigned long current = std::min (nominal, decrease);
-		logging::info (v.first, "Less:", decrease, " ", capp, " ", current, " ", nominal);
 		allocated [v.first] = current;
 		market -= current;
 
 		/// If the VM needs more than nominal, we add it to the buyers for bidding
-		if (usage > nominal) buyers [v.first] = std::min (max - nominal, decrease - nominal);
+		if (decrease > nominal) {
+		    this-> increaseMoney (v.first, 0);
+		    buyers [v.first] = std::min (max - nominal, decrease - nominal);
+		} else {
+		    this-> increaseMoney (v.first, nominal - decrease);
+		}
 	    }
 
 	    /**
 	     *   - 2) The VM usage is higher than the increase trigger
 	     */
-	    else if (perc_usage > this-> _config.triggerIncrement) {
-		logging::info (v.first, "Upper");
-		/// We set the speed of the VM to full capacity
-		
-		auto cap = max;
-		buyers [v.first] = cap - nominal;
-		allocated [v.first] = nominal;
-		market -= nominal;
+	    else if (perc_usage > this-> _config.triggerIncrement && slope > 0.1f) {
+		/// We increase the speed of the VM by a bit		
+		unsigned long increase = capp * (1.0 + this-> _config.increasingSpeed);
+		unsigned long current = std::min (nominal, increase);
+		allocated [v.first] = current;
+		market -= current;
+
+		/// If the VM needs more than nominal, we add it to the buyers for bidding
+		if (increase > nominal) {
+		    this-> increaseMoney (v.first, 0);
+		    market += (capp * this-> _config.increasingSpeed) / 2; // recycling
+		    buyers [v.first] = std::min (max - nominal, increase - nominal);
+		} else {
+		    this-> increaseMoney (v.first, nominal - increase);
+		}
 	    }
 
 	    /**
-	     *   - 3) The VM usage is between the two triggers
+	     *   - 3) The VM usage is between the two triggers, or the slope is really flat
 	     */
 	    else {
-		logging::info (v.first, "None");
-	    	/// We do nothing ?
+		if (slope > -0.1f && slope < 0.1f) {
+		    allocated [v.first] = std::min (max, usage * 2);
+		    market -= usage;
+
+		    if (nominal > usage) {
+			this-> increaseMoney (v.first, nominal - usage);
+		    }		    
+		} else {
+		    unsigned long current = std::min (nominal, capp);		
+		    allocated [v.first] = current;
+		    market -= current;
+		    
+		    /// If the VM needs more than nominal, we add it to the buyers for bidding
+		    if (capp > nominal) {
+			this-> increaseMoney (v.first, 0);
+			buyers [v.first] = std::min (max - nominal, capp - nominal);
+		    } else {
+			this-> increaseMoney (v.first, nominal - capp);
+		    }
+		}
+
 	    }	    
 	}
 
