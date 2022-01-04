@@ -15,20 +15,23 @@ namespace monitor {
     namespace cgroup {
 
 	GroupManager::GroupManager (utils::config::dict & cfg) : _addr (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 8080)),
-							   _frameDurMicro (1000000),
-							   _frameDur (1.0f) 
+								 _clientAddr (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 8080)),
+								 _frameDurMicro (1000000),
+								 _frameDur (1.0f) 
 	{
 	    auto inner = cfg.get <utils::config::dict> ("monitor");
-	    this-> _addr = net::SockAddrV4 (inner.get<std::string> ("addr"));
+	    this-> _addr = net::SockAddrV4 (inner.get<std::string> ("report"));
+	    this-> _clientAddr = net::SockAddrV4 (inner.get<std::string> ("daemon"));
 	    this-> _frameDur = inner.get <float> ("tick");
 	    this-> _vmHistory = inner.get <float> ("slope-history");
+	    this-> _cpuMaxFreq = inner.get <int> ("cpu-max-freq");
 	    this-> _frameDurMicro = (long) (this-> _frameDur * 1000000);
 	    this-> _format = inner.get <std::string> ("format");
 
 	    if (cfg.has <utils::config::dict> ("market")) {
 		auto mark = cfg.get <utils::config::dict> ("market");
 		MarketConfig c;
-		c.baseCycle = mark.getOr<float> ("base-cycle", 30.0) / 100.0;
+		c.cpuFreq = this-> _cpuMaxFreq;
 		c.triggerIncrement = mark.getOr<float> ("trigger-increment", 95.0) / 100.0;
 		c.triggerDecrement = mark.getOr<float> ("trigger-decrement", 50.0) / 100.0;
 		c.decreasingSpeed = mark.getOr<float> ("decreasing-speed", 10.0) / 100.0;
@@ -40,21 +43,21 @@ namespace monitor {
 	    } else this-> _withMarket = inner.getOr <bool> ("marketing", false);
 	}
 
-	
-	GroupManager::GroupManager (net::SockAddrV4 addr, float frameDur) : _addr (addr), _frameDurMicro ((long) (frameDur * 1000000)), _frameDur (frameDur) {}
 
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================          MONITORING          =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+	
 	void GroupManager::run () {	    
-	    this-> _th = concurrency::spawn (this, &GroupManager::tcpLoop);
-	    int nb_turn = 0;
+	    this-> _th = concurrency::spawn (this, &GroupManager::reportTcpLoop);
+	    this-> _daemon = concurrency::spawn (this, &GroupManager::daemonTcpLoop);
 	    while (true) {
 		auto s = std::chrono::system_clock::now ();
-		if (nb_turn % 60 == 0) {
-		    nb_turn = 0;
-		    this-> fullupdate ();
-		} else {
-		    this-> update ();
-		}
-		nb_turn ++;
+		this-> update ();
 		
 		if (this-> _withMarket) { // The monitor can run without market to make comparison with no capping easily
 		    auto result = this-> _market.update (this-> _vms);
@@ -66,18 +69,7 @@ namespace monitor {
 		this-> waitFrame ();
 	    }
 	}
-       
-	const std::map <std::string, VMInfo> & GroupManager::getVms () const {
-	    return this-> _vms;
-	}
 
-	const std::map <std::string, GroupInfo> & GroupManager::getGroups () const {
-	    return this-> _groups;
-	}
-
-	const Market & GroupManager::getMarket () const {
-	    return this-> _market;
-	}
 	
 	void GroupManager::waitFrame () {
 	    auto s = std::chrono::system_clock::now ();
@@ -85,12 +77,6 @@ namespace monitor {
 	    this-> _t.sleep (r);
 	    auto e = std::chrono::system_clock::now ();
 	    this-> _t.reset (e, (e - s));
-	}
-
-	void GroupManager::fullupdate () {
-	    std::string path = "/sys/fs/cgroup/cpu/machine.slice";
-	    //this-> _vms.clear ();
-	    this-> recursiveUpdate (fs::path (path));
 	}
 	
 	void GroupManager::update () {
@@ -103,29 +89,6 @@ namespace monitor {
 	    }
 	}
 
-	void GroupManager::recursiveUpdate (const fs::path & path) {
-	    if (fs::is_directory (path)) {
-		if (path.u8string ().find("machine-qemu") != std::string::npos) {
-		    this-> updateVM (path);
-		} else {
-		    for (const auto & entry : fs::directory_iterator(path)) {
-			if (fs::is_directory (entry.path ())) {
-			    this-> recursiveUpdate (fs::path (entry.path ()));
-			}
-		    }	    
-		}
-	    }
-	}
-
-	void GroupManager::updateVM (const fs::path & path) {
-	    auto fnd = this-> _vms.find (path.filename ());
-	    if (fnd != this-> _vms.end ()) {
-		fnd-> second.update ();
-	    } else {
-		this-> _vms.emplace (path.filename (), VMInfo {path, this-> _vmHistory});
-	    }
-	}
-
 	void GroupManager::applyResult (const std::map <std::string, unsigned long> & res) {
 	    for (auto & it : res) {
 		auto fnd = this-> _vms.find (it.first);
@@ -135,6 +98,65 @@ namespace monitor {
 	    }
 	}
 
+	
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================           GETTERS            =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+	
+	const std::map <std::string, VMInfo> & GroupManager::getVms () const {
+	    return this-> _vms;
+	}
+
+
+	const Market & GroupManager::getMarket () const {
+	    return this-> _market;
+	}
+
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================          VM SEARCH           =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+	
+	void GroupManager::recursiveSearch (const fs::path & path, const std::string & name, unsigned long freq) {
+	    if (fs::is_directory (path)) {
+		if (path.u8string ().find(name) != std::string::npos) {
+		    this-> addVM (path, name, freq);
+		} else {
+		    for (const auto & entry : fs::directory_iterator(path)) {
+			if (fs::is_directory (entry.path ())) {
+			    this-> recursiveSearch (fs::path (entry.path ()), name, freq);
+			}
+		    }	    
+		}
+	    }
+	}
+
+	void GroupManager::addVM (const fs::path & path, const std::string & name, unsigned long freq) {
+	    this-> _vms.erase (name);
+	    auto vm = VMInfo (path, this-> _vmHistory, freq);
+	    this-> _vms.emplace (name, vm);
+	    std::stringstream ss;
+	    ss << vm;
+	    logging::info ("Adding a new VM : ", ss.str ());
+	}
+
+
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================             NET              =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+	
 	void GroupManager::sendReports (std::chrono::duration<double> diff) {
 	    this-> _mutex.lock ();
 	    if (this-> _clients.size () != 0) {
@@ -155,10 +177,8 @@ namespace monitor {
 	    }
 	    this-> _mutex.unlock ();
 	}
-
-	
-
-	void GroupManager::tcpLoop (concurrency::thread t) {	    
+       
+	void GroupManager::reportTcpLoop (concurrency::thread t) {	    
 	    logging::info ("Starting server at", this-> _addr);
 	    net::TcpListener listener (this-> _addr);
 	    listener.start ();
@@ -170,6 +190,33 @@ namespace monitor {
 		this-> _mutex.unlock ();		
 	    }	    
 	}
-	
+
+	void GroupManager::daemonTcpLoop (concurrency::thread t) {
+	    logging::info ("Waiting for new VM infos at ", this-> _clientAddr);
+	    net::TcpListener listener (this-> _clientAddr);
+	    listener.start ();
+	    while (true) {
+		auto client = listener.accept ();
+		this-> _mutex.lock ();
+		this-> receiveVMInfo (client);
+		client.close ();
+		this-> _mutex.unlock ();
+	    }	    
+	}
+
+	void GroupManager::receiveVMInfo (net::TcpStream & client) {
+	    unsigned long nb = client.receiveInt ();
+	    for (int i = 0 ; i < nb ; i++) {
+		unsigned long prot = client.receiveInt (); // The kind of protocol
+		unsigned long len = client.receiveInt (); // The length of the name of the VM
+		std::string name = client.receive (len); // The name of the VM	    
+		if (prot == 0) { // new VM
+		    unsigned long freq = client.receiveInt (); // The base frequency of the VM
+		    auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");		
+		    this-> recursiveSearch (path, name, freq);
+		} else { // VM kill
+		}
+	    }
+	}
     }
 }

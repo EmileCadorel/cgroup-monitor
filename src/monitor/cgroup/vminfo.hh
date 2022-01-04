@@ -6,7 +6,6 @@
 #include <vector>
 #include <monitor/concurrency/timer.hh>
 #include <fstream>
-#include <monitor/cgroup/info.hh>
 
 namespace monitor {       
     namespace cgroup {
@@ -36,18 +35,21 @@ namespace monitor {
 
 	    /// The timer that compute the frame durations
 	    concurrency::timer _t;
+
+	    /// The number of vcpus;
+	    unsigned long _vcpus;
 	    
-	    /// The cgroup of the vcpus
-	    std::vector <GroupInfo> _vcpus;
-
-	    std::ifstream _consoStream;
-
 	    /// the history of consumption of the VM
 	    std::vector <double> _history;
 
+	    /// The maximum number of element in the history
 	    unsigned long _maxhistory;
 
+	    /// The slope of the history
 	    double _slope;
+
+	    /// The minimal guaranteed frequency of the VM (in Mhz)
+	    unsigned long _baseFreq;
 	    
 	public:
 
@@ -56,7 +58,15 @@ namespace monitor {
 	     * @params: 
 	     *  - path: the path of the cgroup in the file system (e.g. /sys/fs/cgroup/my_group)
 	     */
-	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory);	    
+	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory, unsigned long freq);	    
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           GETTERS            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
 
 	    /**
 	     * @returns: the path of the cgroup
@@ -118,11 +128,19 @@ namespace monitor {
 	     * @returns: the number of vcpus of the machine
 	     */
 	    unsigned long getNbVCpus () const;
-	    
+
 	    /**
-	     * @returns: the list of vcpus cgroup of the machine
+	     * @returns: the base frequency to guarantee for the VM in Mhz
 	     */
-	    const std::vector <GroupInfo> & getVCpus () const;
+	    unsigned long getBaseFreq () const;	   
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================          MONITORING          =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
 	    
 	    /**
 	     * Update the information about the group (read this in the filesystem)
@@ -139,6 +157,14 @@ namespace monitor {
 	    void applyCapping (unsigned long nbCycle);
 	    
 	private: 
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           UPDATING           =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
 	    
 	    /**
 	     * Read the cpu consumption of the cgroup from the sys file
@@ -158,6 +184,11 @@ namespace monitor {
 	     */
 	    unsigned long readPeriod () const;	    
 
+	    /**
+	     * Compute the slope of the history
+	     * @params: 
+	     *   - v: the history 
+	     */
 	    double computeSlope (const std::vector <double> & v) const;
 	    
 	};

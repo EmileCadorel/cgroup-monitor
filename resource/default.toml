@@ -1,8 +1,10 @@
 [monitor]
-addr = "127.0.0.1:8081"
+report = "127.0.0.1:8081"
+daemon = "127.0.0.1:8082"
 tick = 1.0
 format = "json"
 slope-history = 5
+cpu-max-freq = 3000
 
 [market]
 base-cycle = 30.0

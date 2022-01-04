@@ -1,5 +1,5 @@
 #include <monitor/cgroup/report.hh>
-#include <monitor/market.hh>
+#include <monitor/cgroup/market.hh>
 #include <sstream>
 #include <monitor/utils/json.hh>
 #include <monitor/utils/toml.hh>
@@ -55,7 +55,7 @@ namespace monitor {
 	    s << "\"relative_usage\" : " << info.getRelativePercentConso () << ", ";
 	    s << "\"capping\" : " << info.getCapping () << ", ";
 	    s << "\"period\" : " << info.getPeriod () << ", ";
-	    s << "\"vcpus\" : " << info.getVCpus ().size () << ", ";
+	    s << "\"vcpus\" : " << info.getNbVCpus () << ", ";
 	    s << "\"slope\" : " << info.getSlope () << " }";
 	}
 

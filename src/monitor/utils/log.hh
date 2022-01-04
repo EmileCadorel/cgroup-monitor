@@ -2,6 +2,7 @@
 
 #include <ctime>
 #include <iostream>
+#include <monitor/concurrency/mutex.hh>
 
 namespace monitor {
 
@@ -9,6 +10,9 @@ namespace monitor {
 
 	namespace logging {
 
+	    /// The mutex for the logging
+	    extern concurrency::mutex __mutex__;
+	    
 	    std::string get_time ();
 	    void content_print ();
 	    
@@ -37,37 +41,47 @@ namespace monitor {
 
 	    template <typename ... T>
 	    void info (T... msg) {
+		__mutex__.lock ();
 		std::cout << "[" << BLUE << "INFO" << RESET << "][" << get_time () << "] ";
-		content_print (msg...);
+		content_print (msg...);		
 		std::cout << std::endl;
+		__mutex__.unlock ();
 	    }
 
 	    template <typename ... T>
 	    void error (T... msg) {
+		__mutex__.lock ();
 		std::cout << "[" << RED << "ERROR" << RESET << "][" << get_time () << "] ";
 		content_print (msg...);
 		std::cout << std::endl;
+		__mutex__.unlock ();
 	    }
 
 	    template <typename ... T>
 	    void warn (T... msg) {
+		__mutex__.lock ();
 		std::cout << "[" << YELLOW << "WARNING" << RESET << "][" << get_time () << "] ";
 		content_print (msg...);
 		std::cout << std::endl;
+		__mutex__.unlock ();
 	    }
 
 	    template <typename ... T>
 	    void success (T... msg) {
+		__mutex__.lock ();
 		std::cout << "[" << GREEN << "SUCCESS" << RESET << "][" << get_time () << "] ";
 		content_print (msg...);
 		std::cout << std::endl;
+		__mutex__.unlock ();
 	    }
 
 	    template <typename ... T>
 	    void strange (T... msg) {
+		__mutex__.lock ();
 		std::cout << "[" << PURPLE << "STRANGE" << RESET << "][ " << get_time () << "] ";
 		content_print (msg...);
 		std::cout << std::endl;
+		__mutex__.unlock ();
 	    }
 
 	}

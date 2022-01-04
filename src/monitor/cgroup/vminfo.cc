@@ -16,31 +16,31 @@ void pop_front(std::vector<T>& vec)
 namespace monitor {
     namespace cgroup {
 
-	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen) :
+	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen, unsigned long baseFreq) :
 	    _path (path),
 	    _name (path.filename ()),
 	    _conso (0),
 	    _cap (0),
 	    _period (0),
-	    _maxhistory (historyLen)
+	    _maxhistory (historyLen),
+	    _baseFreq (baseFreq)
 	{
 	    this-> _t.reset ();
 	    this-> update ();
 	    this-> _lastConso = this-> _conso;
 	    this-> _cap = -1;
 	    this-> _period = this-> readPeriod ();
+	    this-> _vcpus = 0;
 	    
 	    int i = 0;
-	    while (true) {
-		std::stringstream ss;
+	    while (true) { // Get the vcpus of the VM
+		std::stringstream ss; 
 		ss << "vcpu" << i;
 		if (fs::exists (this-> _path / ss.str ())) {
-		    this-> _vcpus.push_back (GroupInfo (this-> _path / ss.str ()));
+		    this-> _vcpus += 1;
 		} else break;
 		i += 1;
 	    }
-	    auto p = this-> _path / "cpuacct.usage";
-	    this-> _consoStream = std::ifstream (p); 	    
 	}
 
 
@@ -53,7 +53,7 @@ namespace monitor {
 	}
 
 	unsigned long VMInfo::getMaximumConso () const {
-	    return this-> _vcpus.size () * 1000000;
+	    return this-> _vcpus * 1000000;
 	}
 
 	unsigned long VMInfo::getAbsoluteConso () const {
@@ -90,13 +90,12 @@ namespace monitor {
 	}
 
 	unsigned long VMInfo::getNbVCpus () const {
-	    return this-> _vcpus.size ();
-	}
-
-	const std::vector <GroupInfo> & VMInfo::getVCpus () const {
 	    return this-> _vcpus;
 	}
 
+	unsigned long VMInfo::getBaseFreq () const {
+	    return this-> _baseFreq;
+	}	
 
 	void VMInfo::applyCapping (unsigned long nbCycle) {
 	    auto cap = (((float) nbCycle) / 1000000.0f) * (float) this-> _period;	    
@@ -146,8 +145,7 @@ namespace monitor {
 		ss_x += (x - m_x) * (x - m_x);
 		sp += (x - m_x) * (values [x] - m_y);
 	    }
-
-	    std::cout << this-> _name << " " << ss_x << " " << sp << " " << sp / ss_x << std::endl;
+	    
 	    return sp/ss_x;
 	}
 	
@@ -198,6 +196,6 @@ namespace monitor {
 
 
 std::ostream & operator<< (std::ostream & s, const monitor::cgroup::VMInfo & info) {
-    s << "cgroup (" << info.getPath () << ", conso=" << info.getAbsoluteConso () << ", maxConso=" << info.getMaximumConso () << ", cap=" << info.getCapping () << ", period=" << info.getPeriod () << ", nbCpus=" << info.getNbVCpus () << ", percent=" << info.getPercentageConso () << ")";
+    s << "cgroup (" << info.getPath () << ", conso=" << info.getAbsoluteConso () << ", maxConso=" << info.getMaximumConso () << ", cap=" << info.getCapping () << ", period=" << info.getPeriod () << ", nbCpus=" << info.getNbVCpus () << ", percent=" << info.getPercentageConso () << ", freq=" << info.getBaseFreq () << ")";
     return s;
 }
