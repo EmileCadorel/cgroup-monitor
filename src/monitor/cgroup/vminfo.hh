@@ -50,6 +50,9 @@ namespace monitor {
 
 	    /// The minimal guaranteed frequency of the VM (in Mhz)
 	    unsigned long _baseFreq;
+
+	    /// cgroup are v2
+	    bool _cgroupV2; 
 	    
 	public:
 
@@ -58,7 +61,7 @@ namespace monitor {
 	     * @params: 
 	     *  - path: the path of the cgroup in the file system (e.g. /sys/fs/cgroup/my_group)
 	     */
-	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory, unsigned long freq);	    
+	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory, unsigned long freq, bool v2);	    
 
 	    /**
 	     * ================================================================================

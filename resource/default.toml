@@ -1,6 +1,6 @@
 [monitor]
-report = "127.0.0.1:8081"
-daemon = "127.0.0.1:8082"
+report = "127.0.0.1:8082"
+daemon = "127.0.0.1:8083"
 tick = 1.0
 format = "json"
 slope-history = 5

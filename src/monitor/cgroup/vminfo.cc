@@ -16,14 +16,15 @@ void pop_front(std::vector<T>& vec)
 namespace monitor {
     namespace cgroup {
 
-	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen, unsigned long baseFreq) :
+	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen, unsigned long baseFreq, bool v2) :
 	    _path (path),
 	    _name (path.filename ()),
 	    _conso (0),
 	    _cap (0),
 	    _period (0),
 	    _maxhistory (historyLen),
-	    _baseFreq (baseFreq)
+	    _baseFreq (baseFreq),
+	    _cgroupV2 (v2)
 	{
 	    this-> _t.reset ();
 	    this-> update ();
@@ -96,22 +97,16 @@ namespace monitor {
 	unsigned long VMInfo::getBaseFreq () const {
 	    return this-> _baseFreq;
 	}	
-
-	void VMInfo::applyCapping (unsigned long nbCycle) {
-	    auto cap = (((float) nbCycle) / 1000000.0f) * (float) this-> _period;	    
-	    this-> _cap = (unsigned long) cap;
-	    auto p = this-> _path / "cpu.cfs_quota_us";	    
-	    if (fs::exists (p)) {
-		std::ofstream m (p);
-		m << this-> _cap;
-	    }	   
-	}
-
 	
 	bool VMInfo::update () {	    
 	    this-> _lastConso = this-> _conso;
 	    bool read = false;
-	    this-> _conso = this-> readConso (read) / 1000;
+	    if (this-> _cgroupV2) {
+		this-> _conso = this-> readConso (read);
+	    } else {
+		this-> _conso = this-> readConso (read) / 1000;
+	    }
+	    
 	    this-> _delta = this-> _t.time_since_start ();
 	    this-> _t.reset ();
 
@@ -121,7 +116,6 @@ namespace monitor {
 	    }
 
 	    this-> _slope = this-> computeSlope (this-> _history);
-	    
 	    if (this-> _cap != -1 && this-> getAbsoluteConso () > this-> getAbsoluteCapping ()) {
 		logging::strange ("Capping is not respected for VM :", this-> _name, this-> getAbsoluteConso (), this-> getAbsoluteCapping (), this-> _delta, this-> getRelativePercentConso ());
 	    }
@@ -148,17 +142,52 @@ namespace monitor {
 	    
 	    return sp/ss_x;
 	}
+
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================    CGROUP READING/WRITING    =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
 	
-	
-	unsigned long VMInfo::readConso (bool & read) {
+	void VMInfo::applyCapping (unsigned long nbCycle) {
+	    auto cap = (((float) nbCycle) / 1000000.0f) * (float) this-> _period;	    
+	    this-> _cap = (unsigned long) cap;
+	    if (!this-> _cgroupV2) {
+		auto p = this-> _path / "cpu.cfs_quota_us";	    
+		if (fs::exists (p)) {
+		    std::ofstream m (p);
+		    m << this-> _cap;
+		}
+	    } else {
+		auto p = this-> _path / "cpu.max";
+		if (fs::exists (p)) {
+		    std::ofstream m (p);
+		    m << this-> _cap << " " << this-> _period;
+		}
+	    }
+	}
+
+		
+	unsigned long VMInfo::readConso (bool & read) {	    
 	    unsigned long res = 0;
-	    auto p = this-> _path / "cpuacct.usage";
-	    std::ifstream t (p);
-	    read = t.good ();
-	    std::stringstream buffer;
-	    buffer << t.rdbuf();
-	    buffer >> res;
-	    	    
+	    if (!this-> _cgroupV2) {
+		auto p = this-> _path / "cpuacct.usage";
+		std::ifstream t (p);
+		read = t.good ();
+		std::stringstream buffer;
+		buffer << t.rdbuf();
+		buffer >> res;
+	    } else {
+		auto p = this-> _path / "cpu.stat";
+		std::ifstream t (p);
+		std::string ignore;
+		read = t.good ();
+		t >> ignore;
+		t >> res;
+		t.close ();
+	    }
 	    return res;
 	}
 
@@ -179,13 +208,17 @@ namespace monitor {
 
 	unsigned long VMInfo::readPeriod () const {
 	    unsigned long res = 0;
-	    auto p = this-> _path / "cpu.cfs_period_us";
-	    
-	    if (fs::exists (p)) {
-		std::ifstream t (p);
-		std::stringstream buffer;
-		buffer << t.rdbuf();
-		buffer >> res;
+	    if (!this-> _cgroupV2) {
+		auto p = this-> _path / "cpu.cfs_period_us";
+		
+		if (fs::exists (p)) {
+		    std::ifstream t (p);
+		    std::stringstream buffer;
+		    buffer << t.rdbuf();
+		    buffer >> res;
+		}
+	    } else {
+		res = 100000;
 	    }
 
 	    return res;

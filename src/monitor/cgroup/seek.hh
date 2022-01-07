@@ -61,6 +61,9 @@ namespace monitor {
 
 	    /// The cpu maximum frequency in MHz
 	    int _cpuMaxFreq;
+
+	    /// Cgroup v2 are activated
+	    bool _cgroupV2;
 	    
 	public :
 

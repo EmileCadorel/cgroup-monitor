@@ -48,7 +48,6 @@ namespace monitor {
 
 	    /// Sell the base, cycle and compute the list of VMs, that needs more cycles than what they are consuming
 	    auto allocated = this-> sellBaseCycles (vms, market, buyers);
-
 	    /// Run the auction, for the VMs that needs more cycles than the nominal
 	    unsigned long allNeeded = 0;
 	    this-> buyCycles (vms, allocated, buyers, market, this-> _firstIteration, allNeeded);
@@ -58,16 +57,16 @@ namespace monitor {
 
 	    // Rest some cycle that have not been sold, so there is some room for optimization	
 	    if (market > 0) {
-		long notSold = market;
-		long rest = std::min (allNeeded, market);
-		for (auto & v : buyers) { // we split the rest of the market between all the VMs that failed to buy
-		    float percent = (float) (v.second) / (float) allNeeded; // Implication of the VMs in the market 
-		    unsigned long add = (unsigned long) (percent * rest);
-		    allocated [v.first] += add;
-		    notSold -= add;	   
-		}
+	    	long notSold = market;
+	    	long rest = std::min (allNeeded, market);
+	    	for (auto & v : buyers) { // we split the rest of the market between all the VMs that failed to buy
+	    	    float percent = (float) (v.second) / (float) allNeeded; // Implication of the VMs in the market 
+	    	    unsigned long add = (unsigned long) (percent * rest);
+	    	    allocated [v.first] += add;
+	    	    notSold -= add;	   
+	    	}
 	    
-		this-> _lost = notSold;
+	    	this-> _lost = notSold;
 	    } else this-> _lost = 0;
 
 	    return allocated;
@@ -139,11 +138,16 @@ namespace monitor {
 		 *  - 1) The VMs uses less than the decrease trigger
 		 */
 		if (slope > -0.1f && slope < 0.1f) {
-		    allocated [v.first] = std::min (max, (unsigned long) (usage * 1.2));
-		    market -= usage;
+		    unsigned long increase = std::min (max, (unsigned long) (usage + v.second.getMaximumConso () * 0.01));
+		    unsigned long current = std::min (nominal, increase);
+		    allocated [v.first] = current;
+		    market -= current;
 
-		    if (nominal > usage) {
-			this-> increaseMoney (v.first, nominal - usage);
+		    if (increase > nominal) {
+			this-> increaseMoney (v.first, 0);
+			buyers [v.first] = std::min (max - nominal, increase - nominal);
+		    } else {
+			this-> increaseMoney (v.first, nominal - increase);
 		    }		    
 		} else if (perc_usage < this-> _config.triggerDecrement) {
 		    /// We decrease the speed of the VM by a bit 
@@ -174,7 +178,7 @@ namespace monitor {
 		    /// If the VM needs more than nominal, we add it to the buyers for bidding
 		    if (increase > nominal) {
 			this-> increaseMoney (v.first, 0);
-			market += (capp * this-> _config.increasingSpeed) / 3; // recycling
+			//market += (capp * this-> _config.increasingSpeed) / 3; // recycling
 			buyers [v.first] = std::min (max - nominal, increase - nominal);
 		    } else {
 			this-> increaseMoney (v.first, nominal - increase);

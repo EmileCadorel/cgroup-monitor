@@ -41,6 +41,10 @@ namespace monitor {
 		this-> _market = Market (c);
 		this-> _withMarket = true;
 	    } else this-> _withMarket = inner.getOr <bool> ("marketing", false);
+
+	    auto path = fs::path ("/sys/fs/cgroup/cgroup.controllers");
+	    if (fs::exists (path)) this-> _cgroupV2 = true;
+	    else this-> _cgroupV2 = false;
 	}
 
 
@@ -141,7 +145,7 @@ namespace monitor {
 
 	void GroupManager::addVM (const fs::path & path, const std::string & name, unsigned long freq) {
 	    this-> _vms.erase (name);
-	    auto vm = VMInfo (path, this-> _vmHistory, freq);
+	    auto vm = VMInfo (path, this-> _vmHistory, freq, this-> _cgroupV2);
 	    this-> _vms.emplace (name, vm);
 	    std::stringstream ss;
 	    ss << vm;
@@ -212,8 +216,13 @@ namespace monitor {
 		std::string name = client.receive (len); // The name of the VM	    
 		if (prot == 0) { // new VM
 		    unsigned long freq = client.receiveInt (); // The base frequency of the VM
-		    auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");		
-		    this-> recursiveSearch (path, name, freq);
+		    if (!this-> _cgroupV2) {
+			auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");		
+			this-> recursiveSearch (path, name, freq);
+		    } else {
+			auto path = fs::path ("/sys/fs/cgroup/machine.slice");		
+			this-> recursiveSearch (path, name, freq);
+		    }
 		} else { // VM kill
 		}
 	    }
