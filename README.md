@@ -68,14 +68,18 @@ nc localhost 8080 | tee out.json
 
 ### On the host 
 
-qemu-img create -f raw example-vm-swap.img 10G
-virsh attach-disk vv0 /tmp/example-vm-swap.img --target vdb --persistent
+```
+$ qemu-img create -f raw example-vm-swap.img 10G
+$ virsh attach-disk vv0 /tmp/example-vm-swap.img --target vdb --persistent
+```
 
 ### In the VM
 
-cfdisk /dev/vdb # creation of the partition, maybe use parted to automate this
-mkswap /dev/vdb1
-swapon /dev/vdb1
+```
+$ cfdisk /dev/vdb # creation of the partition, maybe use parted to automate this
+$ mkswap /dev/vdb1
+$ swapon /dev/vdb1
+```
 
 ## Log the free memory of the VM
 
