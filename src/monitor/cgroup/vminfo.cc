@@ -2,6 +2,7 @@
 #include <sstream>
 #include <fstream>
 #include <monitor/utils/log.hh>
+#include <monitor/concurrency/proc.hh>
 
 namespace fs = std::filesystem;
 using namespace monitor::utils;
@@ -16,9 +17,9 @@ void pop_front(std::vector<T>& vec)
 namespace monitor {
     namespace cgroup {
 
-	VMInfo::VMInfo (const fs::path & path, unsigned long historyLen, unsigned long baseFreq, bool v2) :
+	VMInfo::VMInfo (const std::string & name, const fs::path & path, unsigned long historyLen, unsigned long baseFreq, bool v2) :
 	    _path (path),
-	    _name (path.filename ()),
+	    _name (name),
 	    _conso (0),
 	    _cap (0),
 	    _period (0),
@@ -26,6 +27,7 @@ namespace monitor {
 	    _baseFreq (baseFreq),
 	    _cgroupV2 (v2)
 	{
+	    this-> configureMemory ();
 	    this-> _t.reset ();
 	    this-> update ();
 	    this-> _lastConso = this-> _conso;
@@ -44,6 +46,8 @@ namespace monitor {
 	    }
 	}
 
+
+	
 
 	const fs::path & VMInfo::getPath () const {
 	    return this-> _path;
@@ -106,10 +110,13 @@ namespace monitor {
 	    } else {
 		this-> _conso = this-> readConso (read) / 1000;
 	    }
-	    
+
+	    this-> readMemory (this-> _usedMemory, this-> _allocatedMemory);
 	    this-> _delta = this-> _t.time_since_start ();
 	    this-> _t.reset ();
 
+	    std::cout << this-> _name << " alloc : " << this-> _allocatedMemory << ", used : " << this-> _usedMemory << std::endl;
+	    
 	    this-> _history.push_back (this-> getPercentageConso ());
 	    if (this-> _history.size () > this-> _maxhistory) {
 		pop_front (this-> _history);
@@ -222,6 +229,37 @@ namespace monitor {
 	    }
 
 	    return res;
+	}
+
+	void VMInfo::configureMemory () const {
+	    auto proc = concurrency::SubProcess ("virsh", {"-c", "qemu:///system",  "dommemstat", "v" + this-> _name, "--period", "1", "--live"}, ".");
+	    proc.start ();
+	    proc.wait ();
+	}
+	
+	
+	
+	void VMInfo::readMemory (unsigned long & used, unsigned long & allocated) const {
+	    auto proc = concurrency::SubProcess ("virsh", {"-c", "qemu:///system", "--readonly", "dommemstat", "v" + this-> _name}, ".");
+	    proc.start ();
+	    proc.wait ();
+	    
+	    auto result = proc.stdout ().read ();
+	    std::stringstream ss (result);
+	    std::string T;
+	    while (std::getline (ss, T, '\n')) {
+		if (T.rfind ("actual", 0) == 0) {
+		    std::stringstream ss2;
+		    ss2 << T.substr (7);
+		    ss2 >> allocated;
+		} else if (T.rfind ("unused", 0) == 0) {
+		    std::stringstream ss2;
+		    ss2 << T.substr (7);
+		    ss2 >> used;
+		    used = allocated - used;
+		    return;
+		}
+	    }
 	}
 	
     }

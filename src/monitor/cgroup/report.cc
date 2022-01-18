@@ -29,10 +29,7 @@ namespace monitor {
 		i += 1;
 	    }
 	    s << "}, "; // accounts
-	    s << "\"nb-iteration-f\" : " << market.getFirstNbIterations () << ", ";
-	    s << "\"nb-iteration-s\" : " << market.getSecondNbIterations () << ", ";
-	    s << "\"nb-sold-f\" : " << market.getFirstMarketSold () << ", ";
-	    s << "\"nb-lost\" : " << market.getFirstMarketSold () << "}";
+	    s << "\"nb-iteration-f\" : " << market.getFirstNbIterations () << "}";
 	}
 
 	
@@ -49,8 +46,7 @@ namespace monitor {
 	}
 
 	void Report::vmToDict (std::stringstream & s, const std::string & name, const VMInfo & info) const {
-	    s << "{ \"name\" : \"" << name << "\", ";
-	    s << "\"conso_cycle\" : " << info.getAbsoluteConso () << ", ";
+	    s << "{ \"conso_cycle\" : " << info.getAbsoluteConso () << ", ";
 	    s << "\"host_usage\" : " << info.getPercentageConso () << ", ";
 	    s << "\"relative_usage\" : " << info.getRelativePercentConso () << ", ";
 	    s << "\"capping\" : " << info.getCapping () << ", ";

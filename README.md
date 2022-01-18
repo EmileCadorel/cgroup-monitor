@@ -76,7 +76,7 @@ $ virsh attach-disk vv0 /tmp/example-vm-swap.img --target vdb --persistent
 ### In the VM
 
 ```
-$ cfdisk /dev/vdb # creation of the partition, maybe use parted to automate this
+$ cfdisk /dev/vdb # creation of the partition, maybe use parted to automate this, but it seems useless
 $ mkswap /dev/vdb1
 $ swapon /dev/vdb1
 ```

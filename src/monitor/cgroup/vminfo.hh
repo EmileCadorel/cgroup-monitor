@@ -53,6 +53,18 @@ namespace monitor {
 
 	    /// cgroup are v2
 	    bool _cgroupV2; 
+
+	    /// The quantity of memory consumption
+	    unsigned long _usedMemory;
+
+	    /// The quantity of allocated memory
+	    unsigned long _allocatedMemory;
+	    
+	    /// The history of the memory usage of the VM
+	    std::vector <double> _memoryHistory;
+
+	    /// The maximum memory size of the VM
+	    unsigned long _maxMemory;
 	    
 	public:
 
@@ -61,7 +73,7 @@ namespace monitor {
 	     * @params: 
 	     *  - path: the path of the cgroup in the file system (e.g. /sys/fs/cgroup/my_group)
 	     */
-	    VMInfo (const std::filesystem::path & path, unsigned long maxhistory, unsigned long freq, bool v2);	    
+	    VMInfo (const std::string & name, const std::filesystem::path & path, unsigned long maxhistory, unsigned long freq, bool v2);	    
 
 	    /**
 	     * ================================================================================
@@ -138,6 +150,21 @@ namespace monitor {
 	    unsigned long getBaseFreq () const;	   
 
 	    /**
+	     * @returns: the used memory in MB
+	     */
+	    unsigned long getUsedMemory () const;
+
+	    /**
+	     * @returns: the size of the allocated memory in the VM 
+	     */
+	    unsigned long getAllocatedMemory () const;
+
+	    /**
+	     * @returns: the maximal size of the memory of the VM
+	     */
+	    unsigned long getMaxMemory () const;
+	    
+	    /**
 	     * ================================================================================
 	     * ================================================================================
 	     * =========================          MONITORING          =========================
@@ -193,6 +220,19 @@ namespace monitor {
 	     *   - v: the history 
 	     */
 	    double computeSlope (const std::vector <double> & v) const;
+
+	    /**
+	     * Read the memory usage
+	     * @returns: 
+	     *   - used: the used memory in the VM (that actually correspond to allocated pages)
+	     *   - allocated: the quantity of memory allocated by the host to the VM
+	     */
+	    void readMemory (unsigned long & used, unsigned long & allocated) const;
+
+	    /**
+	     * Configure virsh to acquire memory metrics
+	     */
+	    void configureMemory () const;
 	    
 	};
 

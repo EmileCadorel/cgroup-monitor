@@ -145,7 +145,7 @@ namespace monitor {
 
 	void GroupManager::addVM (const fs::path & path, const std::string & name, unsigned long freq) {
 	    this-> _vms.erase (name);
-	    auto vm = VMInfo (path, this-> _vmHistory, freq, this-> _cgroupV2);
+	    auto vm = VMInfo (name, path, this-> _vmHistory, freq, this-> _cgroupV2);
 	    this-> _vms.emplace (name, vm);
 	    std::stringstream ss;
 	    ss << vm;
