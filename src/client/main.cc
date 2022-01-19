@@ -2,7 +2,6 @@
 #include <monitor/cgroup/seek.hh>
 #include <monitor/net/listener.hh>
 #include <monitor/utils/toml.hh>
-#include <monitor/concurrency/proc.hh>
 
 using namespace monitor::cgroup;
 using namespace monitor::net;
