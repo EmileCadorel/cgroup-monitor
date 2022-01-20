@@ -1,22 +1,17 @@
 #include <iostream>
-#include <monitor/cgroup/seek.hh>
-#include <monitor/net/listener.hh>
-#include <monitor/utils/toml.hh>
+#include "daemon.hh"
+#include <signal.h>
 
-using namespace monitor::cgroup;
-using namespace monitor::net;
-using namespace monitor;
+server::Daemon dam;
 
-int main (int argc, char ** argv) {
-    try {
-	if (argc == 1) throw utils::command_line_error ("./usage config.toml");
-	
-	auto config = utils::toml::parse_file (argv [1]);
-	GroupManager manager (config);
-	manager.run ();
-	
-	return 0;
-    } catch (utils::exception ex) {
-	ex.print ();
-    }
+void terminateSigHandler (int) {
+    dam.kill ();
+    exit (0);
+}
+
+int main () {
+    signal(SIGINT, &terminateSigHandler);
+    
+    dam.start ();
+    dam.join ();
 }

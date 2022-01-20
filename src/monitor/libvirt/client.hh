@@ -4,6 +4,8 @@
 #include <monitor/libvirt/vm.hh>
 #include <monitor/concurrency/mutex.hh>
 #include <filesystem>
+#include <map>
+#include <monitor/foreign/tinyxml2.h>
 
 namespace monitor {
     
@@ -24,9 +26,14 @@ namespace monitor {
 
 	    /// The mutex used to synchronized the VM provisionning/killing that cannot be done in parallel
 	    concurrency::mutex _mutex;
+
+	    /// The list of running VMs
+	    std::map <std::string, LibvirtVM> _running;
 	    
 	public:
 
+	    friend LibvirtVM;
+	    
 	    /**
 	     * @params: 
 	     *   - uri: the uri of the qemu system
@@ -71,15 +78,47 @@ namespace monitor {
 	    void printDomains () const;
 
 	    /**
-	     * Provision a new VM
-	     * @params: 
-	     *   - vm: the vm to provision
-	     *   - destPath: the destination path of the VM provisionning
-	     * @returns: the provisionned VM
-	     * @throws:
-	     *   - LibvirtError: if the provisionning failed
+	     * Kill all the domains that are running on this machine
 	     */
-	    LibvirtVM & provision (LibvirtVM & vm, const std::filesystem::path & destPath = "/tmp/");
+	    void killAllRunningDomains ();
+	    
+	    /**
+	     * Retrieve the XML of the VM vm
+	     * @warning: the doc must be freed by hand
+	     * @params: 
+	     *   - vm: the vm to read (must be provisionned)
+	     * @returns: the xml, empty doc if the vm is down
+	     */
+	    tinyxml2::XMLDocument * getXML (const LibvirtVM & vm) const;
+
+	    /**
+	     * @returns: true iif the VM 'name' is running
+	     */
+	    bool hasVM (const std::string & name);
+
+	    /**
+	     * @returns: the VM named 'name'
+	     * @throws: 
+	     *    - LibvirtError: if the vm does not exists	      
+	     */
+	    LibvirtVM & getVM (const std::string & name);
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           NETWORK            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    /**
+	     * Nat enabling for the VM
+	     * @params: 
+	     *  - vm: the vm to nat
+	     *  - host: the input port (host port)
+	     *  - guest: the output port (guest port)
+	     */
+	    LibvirtVM & openNat (LibvirtVM & vm, int host, int guest);
 	    
 	    /**
 	     * ================================================================================
@@ -175,12 +214,80 @@ namespace monitor {
 	    void waitIpVM (LibvirtVM & vm, const std::filesystem::path & path);
 
 	    /**
-	     * Parse the result of the virsh command to get the mac address
-	     * @params: 
-	     *   - output: the result of the command "virsh domiflist $VM"
-	     * @returns: the mac address or ""
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           KILLING            =========================
+	     * ================================================================================
+	     * ================================================================================
 	     */
-	    std::string parseMacAddress (const std::string & output) const;
+	    
+	    /**
+	     * Kill the libvirt domain (forcing its shutdown and destroying)
+	     * @params: 
+	     *    - vm: the vm to kill
+	     */
+	    void killDomain (const LibvirtVM & vm) const;
+
+	    /**
+	     * Delete the file created during the provisionning
+	     * @params: 
+	     *   - vm: the vm being killed
+	     *   - path: the path of the vm directory
+	     */
+	    void deleteDirAndVMFile (const LibvirtVM & vm, const std::filesystem::path & path) const;	    
+	    
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================            DOMAIN            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    /**
+	     * Retreive the domain of the VM
+	     * @warning: the return value must be freed
+	     * @info: to avoid any problem, only LibvirtVM should call this function
+	     * @params: 
+	     *    - name: the name of the VM
+	     * @returns: the domain of the VM
+	     */
+	    virDomainPtr retreiveDomain (const std::string & name);
+
+	    /**
+	     * Provision a new VM
+	     * @params: 
+	     *   - vm: the vm to provision
+	     *   - destPath: the destination path of the VM provisionning
+	     * @returns: the provisionned VM
+	     * @throws:
+	     *   - LibvirtError: if the provisionning failed
+	     */
+	    LibvirtVM & provision (LibvirtVM & vm, const std::filesystem::path & destPath = "/tmp/");	    
+
+	    /**
+	     * Kill the VM that is running
+	     * @info: delete the associated drives
+	     * @params: 
+	     *   - vm: the vm to kill
+	     *   - path: the location of the installed VM
+	     */
+	    LibvirtVM & kill (LibvirtVM & vm, const std::filesystem::path & path = "/tmp/");
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           NETWORK            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+
+	    /**
+	     * Enable nat routing
+	     */
+	    void enableNatRouting () const;
+	    
 	};
     }
     

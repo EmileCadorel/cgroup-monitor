@@ -7,8 +7,16 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <nlohmann/json.hpp>
+#include <monitor/utils/xml.hh>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 
 using namespace monitor::utils;
+using namespace tinyxml2;
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -23,6 +31,8 @@ namespace monitor {
 		logging::error ("you are not root. This program will only word if run as root.");
 		exit(1);
 	    }
+	    
+	    this-> enableNatRouting ();
 	}
 
 	/**
@@ -40,18 +50,20 @@ namespace monitor {
 	    // We need an auth connection to have write access to the domains
 	    this-> _conn = virConnectOpenAuth (this-> _uri, virConnectAuthPtrDefault, 0);
 	    if (this-> _conn == nullptr) {
-		logging::error ("Failed to connect libvirt client to : ", this-> _uri);
+		logging::error ("Failed to connect libvirt client to :", this-> _uri);
 		throw LibvirtError ("Connection to hypervisor failed\n");
 	    }
 
-	    logging::success ("Libvirt client connected to : ", this-> _uri);
+	    logging::success ("Libvirt client connected to :", this-> _uri);
+	    this-> killAllRunningDomains ();
 	}
 
 	void LibvirtClient::disconnect () {
 	    if (this-> _conn != nullptr) {
-		logging::info ("Disconnect libvirt client");
 		virConnectClose (this-> _conn);
 		this-> _conn = nullptr;
+		
+		logging::info ("Libvirt client disconnected");
 	    }
 	}
 
@@ -62,6 +74,22 @@ namespace monitor {
 	 * ================================================================================
 	 * ================================================================================
 	 */
+
+	void LibvirtClient::killAllRunningDomains () {
+	    virDomainPtr * domains = nullptr;
+	    auto num_domains = virConnectListAllDomains (this-> _conn, &domains, VIR_CONNECT_LIST_DOMAINS_ACTIVE);
+	    for (int i = 0 ; i < num_domains ; i++) {
+		virDomainPtr dom = domains [i];
+		auto name = virDomainGetName (dom);
+		logging::info ("Killing VM:", name + 1);
+		virDomainDestroy (dom);
+		virDomainUndefine (dom);
+		virDomainFree (dom);
+	    }
+
+	    free (domains);
+	    this-> _running.clear ();
+	}
 	
 	void LibvirtClient::printDomains () const {
 	    virDomainPtr * domains = nullptr;	    
@@ -69,13 +97,53 @@ namespace monitor {
 	    for (int i = 0 ; i < num_domains ; i++) {
 		virDomainPtr dom = domains [i];
 		auto name = virDomainGetName (dom);
-		logging::info ("Running Domain : ", name);
+		logging::info ("Running Domain :", name);
 		virDomainFree (dom);
 	    }
 
 	    free (domains);
 	}
+
+	virDomainPtr LibvirtClient::retreiveDomain (const std::string & name) {
+	    return virDomainLookupByName (this-> _conn, ("v" + name).c_str ());	   
+	}
+
+	XMLDocument* LibvirtClient::getXML (const LibvirtVM & vm) const {
+	    XMLDocument * doc = new XMLDocument ();
+	    if (vm._dom != nullptr) {
+		char * xml = virDomainGetXMLDesc (vm._dom, 0);
+		
+		doc-> Parse (xml);
+		
+		free (xml);
+		
+		return doc;
+	    } else {
+		return doc;
+	    }
+	}
+
+	bool LibvirtClient::hasVM (const std::string & name) {
+	    this-> _mutex.lock ();
+	    auto it = this-> _running.find (name);
+	    this-> _mutex.unlock ();
+	    
+	    return it != this-> _running.end ();
+	}
+
+	LibvirtVM & LibvirtClient::getVM (const std::string & name) {
+	    this-> _mutex.lock ();
+	    auto it = this-> _running.find (name);
+	    this-> _mutex.unlock ();
+	    
+	    if (it == this-> _running.end ()) {
+		throw LibvirtError ("Not found : " + name);
+	    }
+
+	    return it-> second;
+	}
 	
+       	
 	LibvirtVM & LibvirtClient::provision (LibvirtVM & vm, const std::filesystem::path & path) {
 	    auto vPath = path / ("v" + vm.id ());
 	    
@@ -88,10 +156,39 @@ namespace monitor {
 	    // wait the ip of the VM
 	    this-> waitIpVM (vm, vPath);
 
-	    logging::success ("VM is ready at ip : ", vm.ip ());
+	    logging::success ("VM", vm.id (), "is ready at ip : ", vm.ip ());
+	    
+	    this-> _running.erase (vm.id ());
+
+	    vm._dom = this-> retreiveDomain (vm.id ());
+	    this-> _running.emplace (vm.id (), vm);
 	    
 	    return vm;
 	}
+
+
+	LibvirtVM & LibvirtClient::kill (LibvirtVM & vm, const std::filesystem::path & path) {
+	    auto vPath = path / ("v" + vm.id ());
+
+	    // Kill the domain
+	    this-> killDomain (vm);
+
+	    // Destroy the vm file, and associated disks
+	    this-> deleteDirAndVMFile (vm, vPath);
+
+	    logging::success ("VM", vm.id (), "is killed");
+	    this-> _running.erase (vm.id ());
+	    
+	    return vm;
+	}
+	
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================    PROVISION INNER FUNCS     =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
 
 	void LibvirtClient::createDirAndVMFile (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
 	    auto qcowFile = vm.qcow ();	    
@@ -210,16 +307,25 @@ namespace monitor {
 	void LibvirtClient::waitIpVM (LibvirtVM & vm, const std::filesystem::path & path) {
 	    concurrency::timer timer;
 	    std::string mac = "", ip = "";
+	    virDomainPtr dom = nullptr;
+	    for (;;) {
+		dom = virDomainLookupByName (this-> _conn, ("v" + vm.id ()).c_str ());
+		if (dom != nullptr) break;
+	    }
+	    
 	    for (;;) { // retreive the mac address of the vm
-		auto proc = concurrency::SubProcess ("virsh", {"domiflist", "v" + vm.id ()}, path);
-		proc.start ();
-		if (proc.wait () != 0) {
-		    timer.sleep (0.5);
-		    continue;
+		char * xml = virDomainGetXMLDesc (dom, 0);
+		if (xml != nullptr) {
+		    XMLDocument doc;
+		    doc.Parse (xml);
+		    delete xml;
+		    
+		    auto macXML = utils::findInXML (doc.RootElement (), {"devices", "interface", "mac"});
+		    if (macXML != nullptr) {
+			mac = macXML-> Attribute ("address");
+			if (mac != "") break;
+		    }
 		}
-		
-		mac = this-> parseMacAddress (proc.stdout ().read ());
-		if (mac != "") break;
 	    }
 
 	    for (;;) { // retreive the ip address of the vm from the mac address
@@ -239,35 +345,89 @@ namespace monitor {
 	    vm.mac (mac).ip (ip);
 	}
 
-	std::string LibvirtClient::parseMacAddress (const std::string & output) const {
-	    std::stringstream ss;
-	    ss << output;
-	    int index = 0;
-	    for (;;) {
-		std::string word;
-		ss >> word;
-		if (word == "MAC") break;
-		else if (word == "") return "";
-		else index += 1;
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================     KILLING INNER FUNCS      =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+	void LibvirtClient::killDomain (const LibvirtVM & vm) const {
+	    auto dom = vm._dom;
+	    virDomainDestroy (dom);
+	    virDomainUndefine (dom);
+	}
+
+	void LibvirtClient::deleteDirAndVMFile (const LibvirtVM & vm, const std::filesystem::path & path) const {
+	    auto isoFile = path / ("user.iso");
+	    auto metaFile = path / ("meta-data");
+	    auto userFile = path / ("user-data");
+	    auto qcowFile = path / ("v" + vm.id () + ".qcow2");
+
+	    ::remove (isoFile.c_str ());
+	    ::remove (metaFile.c_str ());
+	    ::remove (userFile.c_str ());
+	    ::remove (qcowFile.c_str ());
+	}
+
+
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================           NETWORK            =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+
+	LibvirtVM & LibvirtClient::openNat (LibvirtVM & vm, int host, int guest) {
+	    if (vm.ip () != "") {
+		std::stringstream hport, gport;
+		hport << host;
+		gport << guest;
+	    
+		auto proc = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "PREROUTING", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
+		proc.start ();
+		proc.wait ();
+
+		auto proc2 = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "OUTPUT", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
+		proc2.start ();
+		proc2.wait ();
 	    }
 
-	    for (;;) {
-		std::string word;
-		ss >> word;
-		if (word.rfind ("-----") != std::string::npos) break;
-		else if (word == "") return "";		    
+	    return vm;
+	}
+
+	void LibvirtClient::enableNatRouting () const {	    
+	    struct ifaddrs *addresses;
+	    if (getifaddrs(&addresses) == -1)
+	    {
+		return ;
+	    }	    
+	    
+	    struct ifaddrs *address = addresses;
+	    while(address)
+	    {
+		int family = address->ifa_addr->sa_family;
+		if (family == AF_INET && std::string (address->ifa_name) != "virbr0")
+		{
+		    char ap[100];
+		    const int family_size = family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+		    getnameinfo(address->ifa_addr,family_size, ap, sizeof(ap), 0, 0, NI_NUMERICHOST);
+		    std::string ip_face = std::string (ap);
+		    
+		    auto proc = concurrency::SubProcess ("iptables", {"-I", "FORWARD", "-m", "state", "-o", ip_face, "-d", "192.168.122.0/24", "--state", "NEW,RELATED,ESTABLISHED", "-j", "ACCEPT"}, ".");
+		    proc.start ();
+		    proc.wait ();
+		    logging::info ("NAT routing enabled for interface ip :", ip_face);
+		}
+		address = address->ifa_next;
 	    }
 	    
-	    for (int i = 0; i < index ; i++) {
-		std::string word;
-		ss >> word;		
-	    }
-
-	    std::string mac;
-	    ss >> mac;
-
-	    return mac;
+	    freeifaddrs(addresses);
 	}
+
 	
 	/**
 	 * ================================================================================

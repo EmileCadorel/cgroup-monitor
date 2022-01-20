@@ -2,17 +2,27 @@
 
 #include <filesystem>
 #include <string>
+#include <libvirt/libvirt.h>
+#include <monitor/utils/config.hh>
 
 namespace monitor {
 
     namespace libvirt {
 
+	class LibvirtClient;
+	
 	/**
 	 * A libvirt VM is a connected domain to a VM
 	 * It is used to get the usage information of the VM, and apply some management on it (e.g. cpu capping, memory capping)
 	 */
 	class LibvirtVM {
 
+	    /// The context of the VM
+	    LibvirtClient & _context;
+
+	    /// The domain of the VM in libvirt
+	    virDomainPtr _dom;
+	    
 	    /// The id of the vm
 	    std::string _id;
 
@@ -38,16 +48,34 @@ namespace monitor {
 	    std::string _ip;
 
 	    /// The mac address of the VM
-	    std::string _mac;
+	    std::string _mac;	    
 	    
 	public:
 
+	    friend LibvirtClient;
+
+	    /**
+	     * @params: 
+	     *  - cfg: the configuration of the VM
+	     *  - context: the context of the VM for provisioning, killing etc.
+	     */
+	    LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context);
+	    
 	    /**
 	     * @params: 
 	     *  - name: the id of the VM
+	     *  - context: the context of the VM for provisioning, killing etc.
 	     */
-	    LibvirtVM (const std::string & name);
-	    	    
+	    LibvirtVM (const std::string & name, LibvirtClient & context);
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================      SETTERS / GETTERS       =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+	    
 	    /**
 	     * @returns: the name of the VM
 	     */
@@ -152,6 +180,38 @@ namespace monitor {
 	     * @returns: the ip address of the VM
 	     */
 	    const std::string & ip () const;
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================       PROVISION / KILL       =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    /**
+	     * Start the VM if it was not running
+	     */
+	    void provision ();
+
+	    /**
+	     * Kill the VM
+	     */
+	    void kill ();
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================             DTOR             =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+	    
+	    /**
+	     * this-> kill ();
+	     */
+	    ~LibvirtVM ();
+
 	};
 	
     }    

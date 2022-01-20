@@ -1,21 +1,46 @@
 #include <monitor/libvirt/vm.hh>
+#include <monitor/libvirt/client.hh>
 #include <fstream>
 #include <iostream>
+#include <monitor/utils/log.hh>
+
+using namespace monitor::utils;
 
 namespace monitor {
 
     namespace libvirt {
 
-	LibvirtVM::LibvirtVM (const std::string & name) :
+	LibvirtVM::LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context) :
+	    _context (context)
+	{
+	    auto inner = cfg.get <utils::config::dict> ("vm");
+	    this-> _id = inner.get<std::string> ("name");
+	    this-> _userName = inner.getOr<std::string> ("user", "phil");
+	    this-> _qcow = inner.get<std::string> ("image");
+	    this-> _disk = inner.getOr<int> ("disk", 10000);
+	    this-> _vcpus = inner.getOr<int> ("vcpus", 1);
+	    this-> _mem = inner.getOr <int> ("memory", 2048);
+
+	    std::filesystem::path home = getenv ("HOME");	    
+	    this-> pubKey (inner.getOr <std::string> ("ssh_key", std::string ((home / ".ssh/id_rsa.pub").c_str ())));
+
+	    this-> _dom = nullptr;
+	}
+	    
+	
+	LibvirtVM::LibvirtVM (const std::string & name, LibvirtClient & context) :
 	    _id (name),
 	    _userName ("phil"),
 	    _disk (10000),
 	    _vcpus (1),
-	    _mem (2048)
+	    _mem (2048),
+	    _context (context)
 	{
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (home / ".ssh/id_rsa.pub");
-	}	    	
+
+	    this-> _dom = nullptr;
+	}
 	
 	const std::string & LibvirtVM::id () const {
 	    return this-> _id;
@@ -99,6 +124,27 @@ namespace monitor {
 	const std::string & LibvirtVM::ip () const {
 	    return this-> _ip;
 	}
+
+	void LibvirtVM::provision () {
+	    if (this-> _dom == nullptr) {
+		this-> _context.provision (*this);
+	    } else {
+		logging::warn ("VM", this-> _id, "is already provisionned");
+	    }
+	}
+
+	void LibvirtVM::kill () {
+	    if (this-> _dom != nullptr) {
+		this-> _context.kill (*this);
+		virDomainFree (this-> _dom);
+	    } else {
+		logging::warn ("VM", this-> _id, "is already down");
+	    }
+	}
+
+	LibvirtVM::~LibvirtVM () {
+	}
+	
 	
 	
     }

@@ -1,0 +1,7 @@
+[vm]
+name = "v0"
+image = "/home/emile/.qcow2/ubuntu-20.04.qcow2"
+ssh_key = "/home/emile/Documents/lille/frequency/node_manager/keys/key.pub"
+vcpus = 4
+memory = 4096
+disk = 10000
