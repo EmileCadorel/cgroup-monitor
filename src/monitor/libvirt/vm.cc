@@ -11,7 +11,8 @@ namespace monitor {
     namespace libvirt {
 
 	LibvirtVM::LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context) :
-	    _context (context)
+	    _context (context),
+	    _cpuController (*this)
 	{
 	    auto inner = cfg.get <utils::config::dict> ("vm");
 	    this-> _id = inner.get<std::string> ("name");
@@ -34,7 +35,8 @@ namespace monitor {
 	    _disk (10000),
 	    _vcpus (1),
 	    _mem (2048),
-	    _context (context)
+	    _context (context),
+	    _cpuController (*this)
 	{
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (home / ".ssh/id_rsa.pub");
@@ -124,6 +126,31 @@ namespace monitor {
 	const std::string & LibvirtVM::ip () const {
 	    return this-> _ip;
 	}
+
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================         CONTROLLERS          =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+	void LibvirtVM::updateControllers () {
+	    this-> _cpuController.update ();
+	}
+
+	control::LibvirtCpuController & LibvirtVM::getCpuController () {
+	    return this-> _cpuController;
+	}
+	
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================            DOMAIN            =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
 
 	void LibvirtVM::provision () {
 	    if (this-> _dom == nullptr) {

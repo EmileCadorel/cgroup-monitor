@@ -16,16 +16,17 @@ namespace server {
 
 	/// the id of the thread managing the tcp server
 	monitor::concurrency::thread _loopTh;
-
-	/// The mutex for sync
-	monitor::concurrency::mutex _mutex;
 	
 	/// The libvirt connection
-	monitor::libvirt::LibvirtClient _libvirt;
+	monitor::libvirt::LibvirtClient & _libvirt;
 
     public:
 
-	VMServer ();
+	/**
+	 * @params: 
+	 *  - the libvirt client that communicate with libvirt
+	 */
+	VMServer (monitor::libvirt::LibvirtClient & libvirt);
 	
 	/**
 	 * Start the server thread waiting for new connections
@@ -76,6 +77,8 @@ namespace server {
 	
 	/**
 	 * Create the configuration file, in order to access the server from outside process
+	 * @params: 
+	 *    - path: the directory in which dump the configuration
 	 */
 	void dumpConfig (const std::filesystem::path & path = "/var/lib/dio") const;
     };

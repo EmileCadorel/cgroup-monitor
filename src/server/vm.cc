@@ -15,13 +15,13 @@ using json = nlohmann::json;
 
 namespace server {
 
-    VMServer::VMServer () :
-	_listener (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 0))
+    VMServer::VMServer (monitor::libvirt::LibvirtClient & client) :
+	_listener (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 0)),
+	_libvirt (client)
     {}
     
 
     void VMServer::start () {
-	this-> _libvirt.connect ();
 	this-> _loopTh = monitor::concurrency::spawn (this, &VMServer::acceptingLoop);
     }
 
@@ -33,8 +33,6 @@ namespace server {
     void VMServer::kill () {
 	monitor::concurrency::kill (this-> _loopTh);
 	this-> _listener.close ();
-	this-> _libvirt.killAllRunningDomains ();
-	this-> _libvirt.disconnect ();
     }
     
     void VMServer::acceptingLoop (monitor::concurrency::thread th) {

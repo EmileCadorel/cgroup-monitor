@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vm.hh"
+#include "control.hh"
 
 namespace server {
     
@@ -11,8 +12,14 @@ namespace server {
      */
     class Daemon {
 
-	VMServer _vms;	
+	/// The libvirt connection
+	monitor::libvirt::LibvirtClient _libvirt;
 	
+	/// The server provisionning and killing vms
+	VMServer _vms;
+
+	/// The controller of the vms
+	Controller _controller;
 	
     public: 
 	

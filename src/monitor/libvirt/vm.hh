@@ -4,6 +4,7 @@
 #include <string>
 #include <libvirt/libvirt.h>
 #include <monitor/utils/config.hh>
+#include <monitor/libvirt/controller/cpu.hh>
 
 namespace monitor {
 
@@ -48,11 +49,15 @@ namespace monitor {
 	    std::string _ip;
 
 	    /// The mac address of the VM
-	    std::string _mac;	    
+	    std::string _mac;
+
+	    /// The cpu controller of the VM
+	    control::LibvirtCpuController _cpuController;
 	    
 	public:
 
 	    friend LibvirtClient;
+	    friend control::LibvirtCpuController;
 
 	    /**
 	     * @params: 
@@ -180,6 +185,25 @@ namespace monitor {
 	     * @returns: the ip address of the VM
 	     */
 	    const std::string & ip () const;
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================         CONTROLLERS          =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    /**
+	     * Update the controllers of the VM
+	     */
+	    void updateControllers ();
+	    
+	    /**
+	     * @returns: the cpu controller of the VM
+	     */
+	    control::LibvirtCpuController & getCpuController () ;
+	    
 
 	    /**
 	     * ================================================================================
