@@ -103,8 +103,9 @@ namespace monitor {
 		 * Update the quota of the cpu domain
 		 * @params: 
 		 *   - nbMicros: the number of microseconds of cpu usage allowed for the cpu domain during one period
+		 *   - period: the number of period in one second
 		 */
-		void setQuota (int nbMicros);
+		void setQuota (int nbMicros, int period = 10000);
 
 		/**
 		 * Remove the quota limitation of the cpu domain

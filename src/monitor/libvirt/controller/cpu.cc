@@ -26,33 +26,102 @@ namespace monitor {
 	     */
 
 
-	    void LibvirtCpuController::update () {		
-		int stats = VIR_DOMAIN_STATS_CPU_TOTAL;
+	    void LibvirtCpuController::update () {
+		if (this-> _context._dom != nullptr) {
+		    int stats = VIR_DOMAIN_STATS_CPU_TOTAL;
 		
-		virDomainStatsRecordPtr *records = NULL;
-		virDomainStatsRecordPtr *next;
+		    virDomainStatsRecordPtr *records = NULL;
+		    virDomainStatsRecordPtr *next;
 
-		virDomainPtr doms[] = {this-> _context._dom, nullptr};
-		int i = virDomainListGetStats (doms, stats, &records, 0);
-		if (i > 0) {
-		    next = records;
-		    while (*next) {
-			auto v = *next;
-			for (int i = 0; i < v-> nparams; i++) {
-			    if (std::string (v-> params[i].field) == "cpu.time") {
-				this-> addToHistory (v-> params[i].value.ul / 1000); // the time is written in nanosecond
-				logging::info ("VM ", this->_context.id (), "slope :", this-> _slope, this-> _consumption);
+		    virDomainPtr doms[] = {this-> _context._dom, nullptr};
+		    int i = virDomainListGetStats (doms, stats, &records, 0);
+		    if (i > 0) {
+			next = records;
+			while (*next) {
+			    auto v = *next;
+			    for (int i = 0; i < v-> nparams; i++) {
+				if (std::string (v-> params[i].field) == "cpu.time") {
+				    this-> addToHistory (v-> params[i].value.ul / 1000); // the time is written in nanosecond
+				    logging::info ("VM ", this->_context.id (), "slope :", this-> _slope, this-> _consumption);
+				}
 			    }
-			}
 			
-			next++;
+			    next++;
+			}
 		    }
+
+		    virDomainStatsRecordListFree (records);
 		}
-
-		virDomainStatsRecordListFree (records);
 	    }
-	    	
 
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           GETTERS            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+
+	    unsigned long LibvirtCpuController::getConsumption () const {
+		return this-> _consumption;
+	    }
+
+	    int LibvirtCpuController::getPeriod () const {
+		return this-> _period;
+	    }
+
+	    float LibvirtCpuController::getSlope () const {
+		return this-> _slope;
+	    }
+
+	    int LibvirtCpuController::getQuota () const {
+		return this-> _quota;
+	    }
+
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================         CONTROLLING          =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    
+	    void LibvirtCpuController::setQuota (int nbMicros, int period) {
+		this-> _period = period;
+		this-> _quota = nbMicros;
+
+		if (this-> _context._dom != nullptr) {
+		    int npar = 0, maxpar = 0;
+		    virTypedParameterPtr par = nullptr;
+		    if (virTypedParamsAddLLong (&par, &npar, &maxpar,
+						"global_quota",
+						this-> _quota) != 0) {
+			logging::error ("Failed to create parameters for quota :", this-> _context.id ());
+		    }
+
+		    if (virTypedParamsAddULLong (&par, &npar, &maxpar,
+						 "global_period",
+						 this-> _period) != 0) {
+			logging::error ("Failed to create parameters for period :", this-> _context.id ());
+		    }
+
+		    if (virDomainSetSchedulerParameters (this-> _context._dom,
+							 par,
+							 npar) != 0) {
+			logging::error ("Failed to set sched parameters :", this-> _context.id ());	       
+		    }		
+		
+		    virTypedParamsFree (par, npar);
+		}
+	    }
+
+	    void LibvirtCpuController::unlimit () {
+		this-> setQuota (-1);
+	    }
 
 	    /**
 	     * ================================================================================
