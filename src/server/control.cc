@@ -20,7 +20,50 @@ namespace server {
 	_cpuMarket (client),
 	_cpuMarketEnabled (false)
     {
-	std::ifstream f ("/var/lib/dio/cpu-market.json");	
+	this-> readCpuMarketConfig ();
+
+    	fs::create_directories ("/var/log/dio");
+	this-> _logPath = fs::path ("/var/log/dio/") / std::string (("control-log-" + logging::get_time_no_space () + ".json"));
+    }
+
+    void Controller::start () {
+	this-> _loopTh = monitor::concurrency::spawn (this, &Controller::controlLoop);
+    }
+
+    void Controller::join () {
+	monitor::concurrency::join (this-> _loopTh);
+    }
+
+    void Controller::kill () {
+	monitor::concurrency::kill (this-> _loopTh);
+    }
+
+    void Controller::controlLoop (monitor::concurrency::thread th) {
+	for (;;) {
+	    this-> _libvirt.updateControllers ();
+	    if (this-> _cpuMarketEnabled) {
+		this-> _cpuMarket.run ();
+	    }
+
+	    // if (this-> _memoryMarketEnabled) {
+	    // 	this-> _memoryMarket.run ();
+	    // }
+
+	    this-> dumpLogs ();	    
+	    this-> waitFrame ();
+	}
+    }
+
+    void Controller::waitFrame () {
+	auto s = std::chrono::system_clock::now ();
+	auto r = 1.0f - this-> _t.time_since_start ();
+	this-> _t.sleep (r);
+	auto e = std::chrono::system_clock::now ();
+	this-> _t.reset (e, (e - s));
+    }    
+
+    void Controller::readCpuMarketConfig (const fs::path & path) {
+	std::ifstream f (path / "cpu-market.json");	
 	if (f.good ()) {
 	    std::stringstream ss;
 	    ss << f.rdbuf ();
@@ -51,43 +94,9 @@ namespace server {
 	} else {
 	    logging::warn ("CPU Market disabled");
 	}
-
-    	fs::create_directories ("/var/log/dio");
-	this-> _logPath = fs::path ("/var/log/dio/") / std::string (("control-log-" + logging::get_time_no_space () + ".json"));
     }
 
-    void Controller::start () {
-	this-> _loopTh = monitor::concurrency::spawn (this, &Controller::controlLoop);
-    }
-
-    void Controller::join () {
-	monitor::concurrency::join (this-> _loopTh);
-    }
-
-    void Controller::kill () {
-	monitor::concurrency::kill (this-> _loopTh);
-    }
-
-    void Controller::controlLoop (monitor::concurrency::thread th) {
-	for (;;) {
-	    this-> _libvirt.updateControllers ();
-	    if (this-> _cpuMarketEnabled) {
-		this-> _cpuMarket.run ();
-	    }
-
-	    this-> dumpLogs ();	    
-	    this-> waitFrame ();
-	}
-    }
-
-    void Controller::waitFrame () {
-	auto s = std::chrono::system_clock::now ();
-	auto r = 1.0f - this-> _t.time_since_start ();
-	this-> _t.sleep (r);
-	auto e = std::chrono::system_clock::now ();
-	this-> _t.reset (e, (e - s));
-    }    
-
+    
     void Controller::dumpLogs () const {
 	json j;
 	j["time"] = logging::get_time ();

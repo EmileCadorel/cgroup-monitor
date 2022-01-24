@@ -12,7 +12,8 @@ namespace monitor {
 
 	LibvirtVM::LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context) :
 	    _context (context),
-	    _cpuController (*this)
+	    _cpuController (*this),
+	    _memoryController (*this)
 	{
 	    auto inner = cfg.get <utils::config::dict> ("vm");
 	    this-> _id = inner.get<std::string> ("name");
@@ -37,7 +38,8 @@ namespace monitor {
 	    _vcpus (1),
 	    _mem (2048),
 	    _context (context),
-	    _cpuController (*this)
+	    _cpuController (*this),
+	    _memoryController (*this)
 	{
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (home / ".ssh/id_rsa.pub");
@@ -147,6 +149,7 @@ namespace monitor {
 
 	void LibvirtVM::updateControllers () {
 	    this-> _cpuController.update ();
+	    this-> _memoryController.update ();
 	}
 
 	control::LibvirtCpuController & LibvirtVM::getCpuController () {
@@ -169,6 +172,9 @@ namespace monitor {
 	void LibvirtVM::provision () {
 	    if (this-> _dom == nullptr) {
 		this-> _context.provision (*this);
+		if (this-> _dom != nullptr) {
+		    this-> _memoryController.enable ();
+		}
 	    } else {
 		logging::warn ("VM", this-> _id, "is already provisionned");
 	    }

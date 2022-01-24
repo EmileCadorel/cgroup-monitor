@@ -129,11 +129,12 @@ namespace monitor {
 	     */
 
 	    
-	    void LibvirtCpuController::setQuota (int nbMicros, int period) {
+	    void LibvirtCpuController::setQuota (unsigned long nbMicros, unsigned long period) {
 		this-> _period = period;
 		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;	    
 		this-> _quota = (unsigned long) cap;
-		
+
+		logging::info ("VM capping", this-> _context.id (), ":", this-> _quota, "*", this-> _period);
 		if (!this-> _cgroupV2) {
 		    auto p = this-> _cgroupPath / "cpu.cfs_quota_us";	    
 		    if (fs::exists (p)) {

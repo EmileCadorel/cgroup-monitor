@@ -54,7 +54,14 @@ namespace server {
 	void kill ();
 
     private :
-
+	
+	/**
+	 * Read the configuration file of the cpu market 
+	 * @params: 
+	 *   - path: the path of the config directory of the controller
+	 */
+	void readCpuMarketConfig (const std::filesystem::path & path = "/var/lib/dio");
+	
 	/**
 	 * Main loop control the resource affectations
 	 */

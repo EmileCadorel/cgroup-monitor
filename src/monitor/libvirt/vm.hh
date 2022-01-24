@@ -5,6 +5,7 @@
 #include <libvirt/libvirt.h>
 #include <monitor/utils/config.hh>
 #include <monitor/libvirt/controller/cpu.hh>
+#include <monitor/libvirt/controller/memory.hh>
 
 namespace monitor {
 
@@ -56,11 +57,15 @@ namespace monitor {
 
 	    /// The cpu controller of the VM
 	    control::LibvirtCpuController _cpuController;
+
+	    /// The memory controller of the VM
+	    control::LibvirtMemoryController _memoryController;
 	    
 	public:
 
 	    friend LibvirtClient;
 	    friend control::LibvirtCpuController;
+	    friend control::LibvirtMemoryController;
 
 	    /**
 	     * @params: 
@@ -224,7 +229,16 @@ namespace monitor {
 	     */
 	    const control::LibvirtCpuController & getCpuController () const;
 	    
+	    /**
+	     * @returns: the memory controller of the VM
+	     */
+	    control::LibvirtMemoryController & getMemoryController ();
 
+	    /**
+	     * @returns: the memory controller of the VM
+	     */
+	    const control::LibvirtMemoryController & getMemoryController () const;	    
+	    
 	    /**
 	     * ================================================================================
 	     * ================================================================================

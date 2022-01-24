@@ -64,7 +64,7 @@ namespace server {
 	    }
 
 	    for (auto it : allocated) {
-		vms.find (it.first)-> second.getCpuController ().setQuota (it.second, 10000);
+		vms.find (it.first)-> second.getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (i suppose it makes some synchronization when a thread has no slice left)
 	    }
 	}
 
@@ -113,20 +113,21 @@ namespace server {
 	    for (auto & v : vms) {
 		unsigned long usage = v.second.getCpuController ().getConsumption ();
 		unsigned long max = v.second.vcpus () * 1000000;
+		unsigned long min = 100000; // 1/4 de vcpus is the lowest 
 		
 		unsigned long nominal = ((float) v.second.freq ()) / ((float) this-> _config.cpuFreq) * max;
 		unsigned long capp = v.second.getCpuController ().getAbsoluteCapping ();
+
 		
 		float perc_usage = v.second.getCpuController ().getRelativePercentConsumption () / 100.0f;
 		double slope = v.second.getCpuController ().getSlope ();	    
-
 		/**
 		 * We have three cases : 
 		 *  - 1) The VMs uses less than the decrease trigger
 		 */
 		if (slope > -0.1f && slope < 0.1f) {
 		    unsigned long increase = std::min (max, (unsigned long) (usage + max * 0.01));
-		    unsigned long current = std::min (nominal, increase);
+		    unsigned long current = std::max (min, std::min (nominal, increase));
 		    allocated [v.first] = current;
 		    market -= current;
 		    if (increase > nominal) {
@@ -137,7 +138,7 @@ namespace server {
 		    }		    
 		} else if (perc_usage < this-> _config.triggerDecrement) {
 		    /// We decrease the speed of the VM by a bit 
-		    unsigned long decrease = std::max (usage, (unsigned long) (capp * (1.0 - this-> _config.decreasingSpeed)));
+		    unsigned long decrease = std::max (min, std::max (usage, (unsigned long) (capp * (1.0 - this-> _config.decreasingSpeed))));
 		    unsigned long current = std::min (nominal, decrease);
 		    allocated [v.first] = current;
 		    market -= current;
@@ -155,9 +156,9 @@ namespace server {
 		 *   - 2) The VM usage is higher than the increase trigger
 		 */
 		else if (perc_usage > this-> _config.triggerIncrement) {
-		    /// We increase the speed of the VM by a bit		
+		    /// We increase the speed of the VM by a bit
 		    unsigned long increase = capp * (1.0 + this-> _config.increasingSpeed);
-		    unsigned long current = std::min (nominal, increase);
+		    unsigned long current = std::max (min, std::min (nominal, increase));
 		    allocated [v.first] = current;
 		    market -= current;
 
@@ -169,13 +170,14 @@ namespace server {
 		    } else {
 			this-> increaseMoney (v.first, nominal - increase);
 		    }
+		    
 		}
 
 		/**
 		 *   - 3) The VM usage is between the two triggers, or the slope is really flat
 		 */
 		else {
-		    unsigned long current = std::min (nominal, capp);		
+		    unsigned long current = std::max (min, std::min (nominal, capp));		
 		    allocated [v.first] = current;
 		    market -= current;
 		    

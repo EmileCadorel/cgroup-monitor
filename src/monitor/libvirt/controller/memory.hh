@@ -14,9 +14,9 @@ namespace monitor {
 	namespace control {
 
 	    /**
-	     * The cpu controller class is used to get the cpu time of a VM, and tune it
+	     * The memory controller class is used to get the memory usage of a VM and tune it
 	     */
-	    class LibvirtCpuController {
+	    class LibvirtMemoryController {
 
 		/**
 		 * ================================================================================
@@ -25,35 +25,33 @@ namespace monitor {
 		 * ================================================================================
 		 * ================================================================================
 		 */
+
 		
-		/// The vm associated to the controller
+		/// The VM associated to the controller
 		LibvirtVM & _context;
-
-		/// The path to the cgroup directory
-		std::filesystem::path _cgroupPath;
-
-		/// True iif the cgroup is v2
-		bool _cgroupV2;
 
 		/**
 		 * ================================================================================
 		 * ================================================================================
-		 * =========================            CGROUP            =========================
+		 * =========================            USAGE             =========================
 		 * ================================================================================
 		 * ================================================================================
 		 */
+
+		/// The quantity of memory being used in KB (real RAM)
+		unsigned int _used;
+
+		/// THe quantity of memory that is swapping in the VM in KB
+		unsigned int _swapping;
+
+		/// The quantity of RAM that is unused (from the domain, that is not aware of swapping) in KB
+		unsigned int _unused;
 		
-		/// The period of the vm cpu domain in microseconds
-		unsigned long _period = 10000; // 10ms
+		/// The quantity of memory that is allocated to the VM in KB
+		unsigned int _allocated;
 
-		/// The actual quota of the vm cpu domain in microseconds (allowed micro seconds / seconds = period * quota)
-		unsigned long _quota = -1;
-
-		/// The cpu consumption of the cpu 
-		unsigned long _consumption = 0;
-
-		/// The consumption of the last interval
-		unsigned long _lastConsumption = 0;
+		/// The maximum size of the memory that can be allocated to the VM in KB
+		unsigned int _max;
 
 		/**
 		 * ================================================================================
@@ -62,7 +60,7 @@ namespace monitor {
 		 * ================================================================================
 		 * ================================================================================
 		 */
-		
+
 		/// The history in used percentage of the maximum consumption
 		std::vector <float> _history;
 
@@ -70,30 +68,16 @@ namespace monitor {
 		int _maxHistory;
 
 		/// The slope of the history
-		double _slope = 0;
-
-		/**
-		 * ================================================================================
-		 * ================================================================================
-		 * =========================            TIMING            =========================
-		 * ================================================================================
-		 * ================================================================================
-		 */
-
-		/// The time spend between the last two ticks		
-		float _delta;
-
-		/// The timer used to compute the time spent between two frames
-		concurrency::timer _t;
-
+		double _slope = 0;		
+		
 	    public:
 
 		/**
 		 * @params: 
-		 *    - context: the context of the cpu controller
-		 *    - maxHistory: the maximum length of the history		  
+		 *    - context: the context of the memory controller
+		 *    - maxHistory: the maximum length of the history
 		 */
-		LibvirtCpuController (LibvirtVM & context, int maxHistory = 5);
+		LibvirtMemoryController (LibvirtVM & context);
 
 		/**
 		 * ================================================================================
@@ -104,11 +88,17 @@ namespace monitor {
 		 */
 
 		/**
-		 * Update the information of the cpu
+		 * Start the memory controller
+		 * @info: this function should be called just after the creation of the domain
+		 */
+		void enable () ;
+		
+		/**
+		 * Update the information of the memory usage
 		 * @info: this function should be called periodically
 		 */
 		void update () ;
-		
+
 		/**
 		 * ================================================================================
 		 * ================================================================================
@@ -116,52 +106,48 @@ namespace monitor {
 		 * ================================================================================
 		 * ================================================================================
 		 */
+
+		/**
+		 * @returns: the maximum quantity of memory that can be allocated to the VM in KB
+		 */
+		unsigned long getMaxMemory () const;
+
+		/**
+		 * @returns: the quantity of memory that is used by the VM in KB
+		 */
+		unsigned long getUsedMemory () const;
+
+		/**
+		 * @returns: the quantity of swap in the VM in KB
+		 */
+		unsigned long getSwapMemory () const; 
+
+		/**
+		 * @returns: the quantity of memory that is allocated to the VM in the host (memory that can be used before swapping)
+		 */
+		unsigned long getAllocatedMemory () const;
 		
 		/**
-		 * @returns: the cpu consumption conmputed in the last update tick
-		 */	       
-		unsigned long getConsumption () const;
-
-		/**
-		 * @returns: the number of period in one second
+		 * @returns: the quantity of memory used by the VM in relation to the maximum allocation (without counting swap)
 		 */
-		int getPeriod () const;
+		float getAbsolutePercentUsed () const;
+
 
 		/**
-		 * @returns: the cpu slope of the change of consumption in the latests ticks
+		 * @returns: the quantity of memory used by the VM in relation to the current allocation (without counting swap)
+		 */
+		float getRelativePercentUsed () const;
+
+		/**
+		 * @returns: the slope of the used memory
 		 */
 		float getSlope () const;
 
 		/**
-		 * @returns: the actual quota of the cpu domain in one period
+		 * @returns: the slope of the swapping memory
 		 */
-		int getQuota () const;
-
-		/**
-		 * @returns: the cpu consumption of the last tick scaled to the second
-		 */
-		unsigned long getAbsoluteConsumption () const;
-
-		/**
-		 * @returns: the maximum number of cycles the VM can consume in one second if not capped
-		 */
-		unsigned long getMaximumConsumption () const;
-
-		/**
-		 * @returns: the maximum number of cycles the VM can consume in one second based on the current capping
-		 */
-		unsigned long getAbsoluteCapping () const ;
-
-		/**
-		 * @returns: the percentage consumption of the VM in relation to the maximum consumption
-		 */
-		float getPercentageConsumption () const;
-
-		/**
-		 * @returns: the percentage consumption of the VM in relation to the capping
-		 */
-		float getRelativePercentConsumption () const;
-		
+		float getSwapSlope () const;
+			       		
 		/**
 		 * ================================================================================
 		 * ================================================================================
@@ -171,19 +157,19 @@ namespace monitor {
 		 */
 
 		/**
-		 * Update the quota of the cpu domain
-		 * @params: 
-		 *   - nbMicros: the number of microseconds of cpu usage allowed for the cpu domain during one period
-		 *   - period: the number of period in one second
+		 * Set the quantity of memory that can be allocated on the host without swapping
+		 * @params:
+		 *   - max: the quantity of memory to allocate in KB
 		 */
-		void setQuota (unsigned long nbMicros, unsigned long period = 10000);
+		void setAllocatedMemory (int max);
 
 		/**
-		 * Remove the quota limitation of the cpu domain
-		 * @info: sets quota to -1
+		 * Remove the memory limitation of the VM
+		 * @info: sets the max to this-> getMaxMemory ()
 		 */
 		void unlimit ();
-
+		
+		
 		/**
 		 * ================================================================================
 		 * ================================================================================
@@ -193,35 +179,28 @@ namespace monitor {
 		 */
 
 		/**
-		 * @returns: the log about the cpu controller for the current tick
+		 * @returns: the log about the memory controller for the current tick
 		 */
 		nlohmann::json dumpLogs () const;
+
+
 
 	    private :
 
 		/**
-		 * Add a value to the end of the history
+		 * Add the last used consumption to the history
 		 */
 		void addToHistory ();
 
 		/**
-		 * Compute the slope of the history
+		 * @returns: the slope of the list of points
 		 */
-		void computeSlope ();
-
-		/**
-		 * @returns: the current consumption of the cgroup
-		 */
-		unsigned long readConsumption () const;
-
-		/**
-		 * Recursively search for the cgroup of the VM
-		 */
-		std::filesystem::path recursiveSearch (const std::filesystem::path & p, const std::string & vmName);
+		float computeSwapSlope (const std::vector <float> & history);
+		
 	    };
-	    
-	}
-	
-    }    
 
+	}
+
+    }
+    
 }
