@@ -2,6 +2,8 @@
 
 #include <monitor/concurrency/_.hh>
 #include <monitor/libvirt/_.hh>
+#include "market/cpu.hh"
+#include <nlohmann/json.hpp>
 
 namespace server {
 
@@ -18,6 +20,15 @@ namespace server {
 
 	/// The id of the thread managing the control
 	monitor::concurrency::thread _loopTh;	
+
+	/// The cpu market
+	market::CpuMarket _cpuMarket;
+	
+	/// True iif the cpu market has to be executed
+	bool _cpuMarketEnabled;
+
+	/// The path of the log file
+	std::filesystem::path _logPath;
 	
     public:
 
@@ -59,7 +70,7 @@ namespace server {
 	 * @params: 
 	 *   - path: the directory in which dump the logs
 	 */
-	void dumpLog (const std::filesystem::path & path = "/var/log/dio");
+	void dumpLogs () const;
     };
     
 }

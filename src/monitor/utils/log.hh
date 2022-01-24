@@ -14,6 +14,7 @@ namespace monitor {
 	    extern concurrency::mutex __mutex__;
 	    
 	    std::string get_time ();
+	    std::string get_time_no_space ();
 	    void content_print ();
 	    
 	    template <typename T>

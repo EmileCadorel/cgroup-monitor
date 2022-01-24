@@ -157,6 +157,10 @@ namespace monitor {
 
 	    return it-> second;
 	}
+
+	std::map <std::string, LibvirtVM> & LibvirtClient::getRunningVMs () {
+	    return this-> _running;
+	}
 	
        	
 	LibvirtVM & LibvirtClient::provision (LibvirtVM & vm, const std::filesystem::path & path) {
@@ -347,7 +351,10 @@ namespace monitor {
 		std::ifstream f ("/var/lib/libvirt/dnsmasq/virbr0.status");
 		std::stringstream ss;
 		ss << f.rdbuf ();
+		f.close ();
+		
 		auto j = json::parse (ss.str ());
+		
 		for (auto & it : j) {
 		    if (it["mac-address"] == mac) {
 			ip = it ["ip-address"];

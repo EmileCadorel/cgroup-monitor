@@ -21,7 +21,8 @@ namespace monitor {
 	    this-> _disk = inner.getOr<int> ("disk", 10000);
 	    this-> _vcpus = inner.getOr<int> ("vcpus", 1);
 	    this-> _mem = inner.getOr <int> ("memory", 2048);
-
+	    this-> _freq = inner.getOr<int> ("frequency", 1000);
+	    
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (inner.getOr <std::string> ("ssh_key", std::string ((home / ".ssh/id_rsa.pub").c_str ())));
 
@@ -127,6 +128,15 @@ namespace monitor {
 	    return this-> _ip;
 	}
 
+	int LibvirtVM::freq () const {
+	    return this-> _freq;
+	}
+
+	LibvirtVM & LibvirtVM::freq (int fr) {
+	    this-> _freq = fr;
+	    return *this;
+	}
+
 	/**
 	 * ================================================================================
 	 * ================================================================================
@@ -140,6 +150,10 @@ namespace monitor {
 	}
 
 	control::LibvirtCpuController & LibvirtVM::getCpuController () {
+	    return this-> _cpuController;
+	}
+
+	const control::LibvirtCpuController & LibvirtVM::getCpuController () const {
 	    return this-> _cpuController;
 	}
 	

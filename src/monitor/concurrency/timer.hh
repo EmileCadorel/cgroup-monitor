@@ -28,7 +28,7 @@ namespace monitor {
 	    /**
 	     * @return: the number of seconds since last start
 	     */
-	    float time_since_start ();
+	    float time_since_start () const;
 
 	    /**
 	     * Sleep for nbSec

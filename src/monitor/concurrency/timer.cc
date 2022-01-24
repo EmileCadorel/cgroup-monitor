@@ -18,7 +18,7 @@ namespace monitor {
 	    this-> _start_time = now;// - std::chrono::duration_cast<std::chrono::duration<long> > (diff);
 	}
 	
-	float timer::time_since_start () {
+	float timer::time_since_start () const {
 	    auto end = std::chrono::system_clock::now();
 	    std::chrono::duration<double> diff = end - this-> _start_time;
 	    return diff.count ();

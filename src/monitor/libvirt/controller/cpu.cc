@@ -2,7 +2,9 @@
 #include <monitor/libvirt/vm.hh>
 #include <libvirt/libvirt.h>
 #include <monitor/utils/log.hh>
+#include <fstream>
 
+namespace fs = std::filesystem;
 using namespace monitor::utils;
 
 namespace monitor {
@@ -14,7 +16,11 @@ namespace monitor {
 	    LibvirtCpuController::LibvirtCpuController (LibvirtVM & context, int maxHistory) :
 		_context (context),
 		_maxHistory (maxHistory)
-	    {}
+	    {
+		std::ifstream f ("/sys/fs/cgroup/cgroup.controllers");
+		this-> _cgroupV2 = f.good ();
+		f.close ();		
+	    }
 
 
 	    /**
@@ -27,33 +33,46 @@ namespace monitor {
 
 
 	    void LibvirtCpuController::update () {
-		if (this-> _context._dom != nullptr) {
-		    int stats = VIR_DOMAIN_STATS_CPU_TOTAL;
-		
-		    virDomainStatsRecordPtr *records = NULL;
-		    virDomainStatsRecordPtr *next;
-
-		    virDomainPtr doms[] = {this-> _context._dom, nullptr};
-		    int i = virDomainListGetStats (doms, stats, &records, 0);
-		    if (i > 0) {
-			next = records;
-			while (*next) {
-			    auto v = *next;
-			    for (int i = 0; i < v-> nparams; i++) {
-				if (std::string (v-> params[i].field) == "cpu.time") {
-				    this-> addToHistory (v-> params[i].value.ul / 1000); // the time is written in nanosecond
-				    logging::info ("VM ", this->_context.id (), "slope :", this-> _slope, this-> _consumption);
-				}
-			    }
-			
-			    next++;
-			}
-		    }
-
-		    virDomainStatsRecordListFree (records);
+		if (this-> _cgroupPath == "") {
+		    if (this-> _cgroupV2) {
+			auto path = fs::path ("/sys/fs/cgroup/machine.slice");
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+		    } else {
+			auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");	
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+		    }		    
 		}
+		
+		this-> _lastConsumption = this-> _consumption;
+		this-> _consumption = this-> readConsumption ();
+		if (!this-> _cgroupV2) this-> _consumption /= 1000;
+
+		this-> _delta = this-> _t.time_since_start ();
+		this-> _t.reset ();
+		
+		this-> addToHistory ();
 	    }
 
+
+	    unsigned long LibvirtCpuController::readConsumption () const {
+		unsigned long res = 0;
+		if (!this-> _cgroupV2) {
+		    auto p = this-> _cgroupPath / "cpuacct.usage";
+		    std::ifstream t (p);
+		    std::stringstream buffer;
+		    buffer << t.rdbuf();
+		    buffer >> res;
+		    t.close ();
+		} else {
+		    auto p = this-> _cgroupPath / "cpu.stat";
+		    std::ifstream t (p);
+		    std::string ignore;
+		    t >> ignore;
+		    t >> res;
+		    t.close ();
+		}
+		return res;
+	    }
 
 	    /**
 	     * ================================================================================
@@ -65,7 +84,7 @@ namespace monitor {
 
 
 	    unsigned long LibvirtCpuController::getConsumption () const {
-		return this-> _consumption;
+		return this-> _consumption - this-> _lastConsumption;
 	    }
 
 	    int LibvirtCpuController::getPeriod () const {
@@ -80,7 +99,27 @@ namespace monitor {
 		return this-> _quota;
 	    }
 
+	    unsigned long LibvirtCpuController::getAbsoluteConsumption () const {
+		return ((float) (this-> _consumption - this-> _lastConsumption)) / this-> _delta;
+	    }
 
+	    unsigned long LibvirtCpuController::getMaximumConsumption () const {
+		return this-> _context.vcpus () * 1000000;
+	    }
+
+	    unsigned long LibvirtCpuController::getAbsoluteCapping () const {
+		auto cap = (((float) this-> _quota) * 1000000.0f) / (float) this-> _period;
+		return (unsigned long) cap;
+	    }
+	    
+	    float LibvirtCpuController::getPercentageConsumption () const {
+		return ((float) this-> getAbsoluteConsumption ()) / ((float) this-> getMaximumConsumption ()) * 100.0f;
+	    }
+
+	    float LibvirtCpuController::getRelativePercentConsumption () const {
+		return ((float) this-> getAbsoluteConsumption ()) / ((float) this-> getAbsoluteCapping ()) * 100.0f;
+	    }
+	    
 	    /**
 	     * ================================================================================
 	     * ================================================================================
@@ -92,30 +131,23 @@ namespace monitor {
 	    
 	    void LibvirtCpuController::setQuota (int nbMicros, int period) {
 		this-> _period = period;
-		this-> _quota = nbMicros;
-
-		if (this-> _context._dom != nullptr) {
-		    int npar = 0, maxpar = 0;
-		    virTypedParameterPtr par = nullptr;
-		    if (virTypedParamsAddLLong (&par, &npar, &maxpar,
-						"global_quota",
-						this-> _quota) != 0) {
-			logging::error ("Failed to create parameters for quota :", this-> _context.id ());
-		    }
-
-		    if (virTypedParamsAddULLong (&par, &npar, &maxpar,
-						 "global_period",
-						 this-> _period) != 0) {
-			logging::error ("Failed to create parameters for period :", this-> _context.id ());
-		    }
-
-		    if (virDomainSetSchedulerParameters (this-> _context._dom,
-							 par,
-							 npar) != 0) {
-			logging::error ("Failed to set sched parameters :", this-> _context.id ());	       
-		    }		
+		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;	    
+		this-> _quota = (unsigned long) cap;
 		
-		    virTypedParamsFree (par, npar);
+		if (!this-> _cgroupV2) {
+		    auto p = this-> _cgroupPath / "cpu.cfs_quota_us";	    
+		    if (fs::exists (p)) {
+			std::ofstream m (p);
+			m << this-> _quota;
+			m.close ();
+		    }
+		} else {
+		    auto p = this-> _cgroupPath / "cpu.max";
+		    if (fs::exists (p)) {
+			std::ofstream m (p);
+			m << this-> _quota << " " << this-> _period;
+			m.close ();
+		    }
 		}
 	    }
 
@@ -126,31 +158,46 @@ namespace monitor {
 	    /**
 	     * ================================================================================
 	     * ================================================================================
-	     * =========================           PRIVATE            =========================
+	     * =========================             LOG              =========================
 	     * ================================================================================
 	     * ================================================================================
 	     */
-	
-	    void LibvirtCpuController::addToHistory (unsigned long val) {
-		this-> _history.push_back (val);
+
+	    nlohmann::json LibvirtCpuController::dumpLogs () const {
+		nlohmann::json j;
+		j["host-usage"] = this-> getPercentageConsumption ();
+		j["cycles"] = this-> getAbsoluteConsumption ();
+		j["relative-usage"] = this-> getRelativePercentConsumption ();
+		j["capping"] = this-> getQuota ();
+		j["period"] = this-> getPeriod ();
+		j["slope"] = this-> getSlope ();
+
+		return j;
+	    }	    
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================            SLOPE             =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+	    
+	    void LibvirtCpuController::addToHistory () {		
+		this-> _history.push_back (this-> getPercentageConsumption ());
 		if (this-> _history.size () > this-> _maxHistory) {
 		    this-> _history.erase (this-> _history.begin ());
 		}
 	    
 		if (this-> _history.size () == this-> _maxHistory) this-> computeSlope ();
-		if (this-> _history.size () >= 2) {
-		    this-> _consumption = this-> _history[this-> _history.size () - 1] - this-> _history [this-> _history.size () - 2];
-		}
 	    }
 
 	    void LibvirtCpuController::computeSlope () {
-		double max = (unsigned long) this-> _context.vcpus () * (unsigned long) 1000000;
 		double sum_x = 0;
 		double sum_y = 0;
 
-		for (int x = 1 ; x < this-> _history.size () ; x++) {
-		    auto perc = ((double) this-> _history [x] - this-> _history [x - 1]) / max;
-		    sum_y += perc;
+		for (int x = 0; x < this-> _history.size () ; x++) {
+		    sum_y += this-> _history [x];
 		    sum_x += x;
 		}
 		
@@ -158,16 +205,38 @@ namespace monitor {
 		auto m_y = sum_y / (double) (this-> _history.size ());
 
 		double ss_x = 0.0, sp = 0.0;
-		for (int x = 1 ; x < this-> _history.size (); x++) {
-		    auto perc = ((double) this-> _history [x] - this-> _history [x - 1]) / max ;
+		for (int x = 0 ; x < this-> _history.size (); x++) {
 		    ss_x += (x - m_x) * (x - m_x);
-		    sp += (x - m_x) * (perc - m_y);
+		    sp += (x - m_x) * (this-> _history [x] - m_y);
 		}
 
 		this-> _slope = sp / ss_x;
 	    }
 
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================            CGROUP            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
 	    
+	    std::filesystem::path LibvirtCpuController::recursiveSearch (const fs::path & path, const std::string & name) {
+		if (fs::is_directory (path)) {
+		    if (path.u8string ().find(name) != std::string::npos) {
+			return path;
+		    } else {
+			for (const auto & entry : fs::directory_iterator(path)) {
+			    if (fs::is_directory (entry.path ())) {
+				return this-> recursiveSearch (fs::path (entry.path ()), name);
+			    }
+			}	    
+		    }
+		}
+
+		return ""; 
+	    }
+
 	}
 
     }

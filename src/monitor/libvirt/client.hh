@@ -118,6 +118,11 @@ namespace monitor {
 	    LibvirtVM & getVM (const std::string & name);
 
 	    /**
+	     * @returns: the running VMs on the host
+	     */
+	    std::map <std::string, LibvirtVM> & getRunningVMs ();
+	    
+	    /**
 	     * ================================================================================
 	     * ================================================================================
 	     * =========================           NETWORK            =========================

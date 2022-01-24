@@ -45,6 +45,9 @@ namespace monitor {
 	    /// The size of the memory of the vm in MB
 	    int _mem;
 
+	    /// The frequence of the VM in MHz
+	    int _freq;
+	    
 	    /// The ip address of the VM
 	    std::string _ip;
 
@@ -187,6 +190,18 @@ namespace monitor {
 	    const std::string & ip () const;
 
 	    /**
+	     * @returns: the frequence of the VM (in MHz)
+	     */
+	    int freq () const;
+
+	    /**
+	     * Set the frequence of the VM in MHz
+	     * @params: 
+	     *   - frq: the new frequence
+	     */
+	    LibvirtVM & freq (int frq);
+	    
+	    /**
 	     * ================================================================================
 	     * ================================================================================
 	     * =========================         CONTROLLERS          =========================
@@ -203,6 +218,11 @@ namespace monitor {
 	     * @returns: the cpu controller of the VM
 	     */
 	    control::LibvirtCpuController & getCpuController () ;
+
+	    /**
+	     * @returns: the cpu controller of the VM
+	     */
+	    const control::LibvirtCpuController & getCpuController () const;
 	    
 
 	    /**

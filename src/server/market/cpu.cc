@@ -1,45 +1,44 @@
-#include <monitor/cgroup/market.hh>
+#include "cpu.hh"
 #include <sys/sysinfo.h>
 #include <algorithm>  
 #include <monitor/utils/log.hh>
 
-
-using namespace monitor::cgroup;
+using namespace monitor::libvirt;
 using namespace monitor::utils;
 
-namespace monitor {
+namespace server {
 
-    namespace cgroup {
-    
-	Market::Market () {
-	    this-> _config = MarketConfig {
-		1000,
-		0.95,
-		0.5,
-		0.1,
-		0.1,
-		10000
-	    };
+    namespace market {
+
+	CpuMarket::CpuMarket (monitor::libvirt::LibvirtClient & client) :
+	    _libvirt (client)
+	{}
+	
+	CpuMarket::CpuMarket (monitor::libvirt::LibvirtClient & client, CpuMarketConfig cfg) :
+	    _libvirt (client),
+	    _config (cfg)
+	{}
+
+	void CpuMarket::setConfig (CpuMarketConfig cfg) {
+	    this-> _config = cfg;
 	}
 
-	Market::Market (MarketConfig conf) {
-	    this-> _config = conf;
+	nlohmann::json CpuMarket::dumpLogs () const {
+	    nlohmann::json j;
+	    nlohmann::json j2;
+	    for (auto & v : this-> _accounts) {
+		j2 [v.first] = v.second;
+	    }
+	    
+	    j ["accounts"] = j2;
+
+	    return j;
 	}
-
-	/**
-	 * ================================================================================
-	 * ================================================================================
-	 * =========================       MARKET / AUCTION       =========================
-	 * ================================================================================
-	 * ================================================================================
-	 */
-
-    
-	/**
-	 * Cf. market.hh
-	 */
-	std::map <std::string, unsigned long> Market::update (const std::map <std::string, VMInfo> & vms) {
-	    if (vms.size () == 0) return {};
+	
+	
+	void CpuMarket::run () {
+	    auto & vms = this-> _libvirt.getRunningVMs ();
+	    if (vms.size () == 0) return;
 
 	    /// The market is the number micro seconds in one second * the number of CPUs on the machine
 	    /// everything in the market is reported to the second, the VMInfo, and GroupManager make the relation to tick, it is easier that way
@@ -50,10 +49,7 @@ namespace monitor {
 	    auto allocated = this-> sellBaseCycles (vms, market, buyers);
 	    /// Run the auction, for the VMs that needs more cycles than the nominal
 	    unsigned long allNeeded = 0;
-	    this-> buyCycles (vms, allocated, buyers, market, this-> _firstIteration, allNeeded);
-	
-	    /// Compute the number of cycles that are sold since the beginning, for debugging infos
-	    this-> _firstMarket = (get_nprocs () * 1000000) - market;
+	    this-> buyCycles (allocated, buyers, market, allNeeded);
 
 	    // Rest some cycle that have not been sold, so there is some room for optimization	
 	    if (market > 0) {
@@ -64,30 +60,23 @@ namespace monitor {
 	    	    unsigned long add = (unsigned long) (percent * rest);
 	    	    allocated [v.first] += add;
 	    	    notSold -= add;	   
-	    	}
-	    
-	    	this-> _lost = notSold;
-	    } else this-> _lost = 0;
+	    	}	    
+	    }
 
-	    return allocated;
-	}    
+	    for (auto it : allocated) {
+		vms.find (it.first)-> second.getCpuController ().setQuota (it.second, 10000);
+	    }
+	}
 
-	/**
-	 * Cf. market.hh
-	 */
-	void Market::buyCycles (const std::map <std::string, cgroup::VMInfo> & vms,
-				std::map <std::string, unsigned long> & allocated,
-				std::map <std::string, unsigned long> & buyers,
-				unsigned long & market,
-				unsigned long & iterations,
-				unsigned long & allNeeded)
+	void CpuMarket::buyCycles (std::map <std::string, unsigned long> & allocated,
+				   std::map <std::string, unsigned long> & buyers,
+				   unsigned long & market,
+				   unsigned long & allNeeded)
 	
 	{
 	    /// The list of VMs that failed their bidding, because they have no money
 	    std::map <std::string, unsigned long> failed;
-	    iterations = 0;	
 	    while (market > 0 && buyers.size () > 0) {
-		iterations += 1; 
 		for (auto v = buyers.cbegin () ; v != buyers.cend () ; ) { // we cannot use : for (auto & v : buyers), because we need to erase elements in the map
 		    auto money = this-> _accounts [v-> first];
 		    if (v-> second != 0) {
@@ -116,33 +105,30 @@ namespace monitor {
 	}
 
 
-	/**
-	 * Cf. market.hh
-	 */
-	std::map <std::string, unsigned long> Market::sellBaseCycles (const std::map <std::string, cgroup::VMInfo> & vms,
-								      unsigned long & market,
-								      std::map <std::string, unsigned long> & buyers)
+	std::map <std::string, unsigned long> CpuMarket::sellBaseCycles (const std::map <std::string, LibvirtVM> & vms,
+									 unsigned long & market,
+									 std::map <std::string, unsigned long> & buyers)
 	{
 	    std::map <std::string, unsigned long> allocated;
 	    for (auto & v : vms) {
-		unsigned long usage = v.second.getAbsoluteConso ();
-		unsigned long nominal = ((float) v.second.getBaseFreq ()) / ((float) this-> _config.cpuFreq) * v.second.getMaximumConso ();
-		unsigned long max = v.second.getMaximumConso ();
-		float perc_usage = v.second.getRelativePercentConso () / 100.0;
-		unsigned long capp = v.second.getAbsoluteCapping ();
-		double slope = v.second.getSlope ();	    
+		unsigned long usage = v.second.getCpuController ().getConsumption ();
+		unsigned long max = v.second.vcpus () * 1000000;
+		
+		unsigned long nominal = ((float) v.second.freq ()) / ((float) this-> _config.cpuFreq) * max;
+		unsigned long capp = v.second.getCpuController ().getAbsoluteCapping ();
+		
+		float perc_usage = v.second.getCpuController ().getRelativePercentConsumption () / 100.0f;
+		double slope = v.second.getCpuController ().getSlope ();	    
 
-		if (v.second.getCapping() == -1) capp = nominal;
 		/**
 		 * We have three cases : 
 		 *  - 1) The VMs uses less than the decrease trigger
 		 */
 		if (slope > -0.1f && slope < 0.1f) {
-		    unsigned long increase = std::min (max, (unsigned long) (usage + v.second.getMaximumConso () * 0.01));
+		    unsigned long increase = std::min (max, (unsigned long) (usage + max * 0.01));
 		    unsigned long current = std::min (nominal, increase);
 		    allocated [v.first] = current;
 		    market -= current;
-
 		    if (increase > nominal) {
 			this-> increaseMoney (v.first, 0);
 			buyers [v.first] = std::min (max - nominal, increase - nominal);
@@ -206,7 +192,7 @@ namespace monitor {
 	    return allocated;
 	}
 
-	void Market::increaseMoney (const std::string & vmName, unsigned long money) {
+	void CpuMarket::increaseMoney (const std::string & vmName, unsigned long money) {
 	    auto fnd = this-> _accounts.find (vmName);
 	    if (fnd == this-> _accounts.end ()) {
 		this-> _accounts [vmName] = money;
@@ -214,36 +200,9 @@ namespace monitor {
 		fnd-> second = fnd-> second + money;
 	    }
 	}
+
+	
+    }
     
 
-	/**
-	 * ================================================================================
-	 * ================================================================================
-	 * =========================           GETTERS            =========================
-	 * ================================================================================
-	 * ================================================================================
-	 */
-
-
-	const std::map <std::string, unsigned long> & Market::getAccounts () const {
-	    return this-> _accounts;
-	}
-    
-	unsigned long Market::getFirstNbIterations () const {
-	    return this-> _firstIteration;
-	}
-
-	unsigned long Market::getSecondNbIterations () const {
-	    return this-> _secondIteration;
-	}
-
-	unsigned long Market::getFirstMarketSold () const {
-	    return this-> _firstMarket;
-	}
-
-	unsigned long Market::getLost () const {
-	    return this-> _lost;
-	}
-
-    }    
 }
