@@ -19,9 +19,6 @@ namespace monitor {
 	 */
 	class LibvirtVM {
 
-	    /// The context of the VM
-	    LibvirtClient & _context;
-
 	    /// The domain of the VM in libvirt
 	    virDomainPtr _dom;
 	    
@@ -72,14 +69,14 @@ namespace monitor {
 	     *  - cfg: the configuration of the VM
 	     *  - context: the context of the VM for provisioning, killing etc.
 	     */
-	    LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context);
+	    LibvirtVM (const utils::config::dict & cfg);
 	    
 	    /**
 	     * @params: 
 	     *  - name: the id of the VM
 	     *  - context: the context of the VM for provisioning, killing etc.
 	     */
-	    LibvirtVM (const std::string & name, LibvirtClient & context);
+	    LibvirtVM (const std::string & name);
 
 	    /**
 	     * ================================================================================
@@ -213,11 +210,6 @@ namespace monitor {
 	     * ================================================================================
 	     * ================================================================================
 	     */
-
-	    /**
-	     * Update the controllers of the VM
-	     */
-	    void updateControllers ();
 	    
 	    /**
 	     * @returns: the cpu controller of the VM

@@ -104,6 +104,12 @@ namespace monitor {
 		 */
 
 		/**
+		 * Initialize some variable for the cpu controller
+		 * @info: this function should be called once after the VM is booted
+		 */
+		void enable () ;
+
+		/**
 		 * Update the information of the cpu
 		 * @info: this function should be called periodically
 		 */

@@ -32,17 +32,17 @@ namespace monitor {
 	     */
 
 
-	    void LibvirtCpuController::enable () {
-		if (this-> _cgroupV2) {
-		    auto path = fs::path ("/sys/fs/cgroup/machine.slice");
-		    this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
-		} else {
-		    auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");	
-		    this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
-		}		    		
-	    }
-	    
-	    void LibvirtCpuController::update () {			
+	    void LibvirtCpuController::update () {
+		if (this-> _cgroupPath == "") {
+		    if (this-> _cgroupV2) {
+			auto path = fs::path ("/sys/fs/cgroup/machine.slice");
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+		    } else {
+			auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");	
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+		    }		    
+		}
+		
 		this-> _lastConsumption = this-> _consumption;
 		this-> _consumption = this-> readConsumption ();
 		if (!this-> _cgroupV2) this-> _consumption /= 1000;
@@ -129,12 +129,11 @@ namespace monitor {
 	     */
 
 	    
-	    void LibvirtCpuController::setQuota (unsigned long nbMicros, unsigned long period) {
+	    void LibvirtCpuController::setQuota (int nbMicros, int period) {
 		this-> _period = period;
 		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;	    
 		this-> _quota = (unsigned long) cap;
-
-		logging::info ("VM capping", this-> _context.id (), ":", this-> _quota, "*", this-> _period);
+		
 		if (!this-> _cgroupV2) {
 		    auto p = this-> _cgroupPath / "cpu.cfs_quota_us";	    
 		    if (fs::exists (p)) {

@@ -71,7 +71,7 @@ namespace server {
 	    /**
 	     * Selling the base cycles of the VMs (guarantee of nominal frequency)
 	     */
-	    std::map <std::string, unsigned long> sellBaseCycles (const std::map <std::string, monitor::libvirt::LibvirtVM> & vms,
+	    std::map <std::string, unsigned long> sellBaseCycles (const std::map <std::string, monitor::libvirt::LibvirtVM*> & vms,
 								  unsigned long & market,
 								  std::map <std::string, unsigned long> & buyers);
 

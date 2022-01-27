@@ -12,14 +12,19 @@ namespace server {
      */
     class Controller {
 	
-	/// The timer used to compute frame time, and run the controller at the correct pace
-	monitor::concurrency::timer _t;
+	/// The timer used to compute cpu frame time, and run the controller at the correct pace
+	monitor::concurrency::timer _cpuT;
+
+	monitor::concurrency::timer _memT;
 	
 	/// The libvirt connection
 	monitor::libvirt::LibvirtClient & _libvirt;
 
-	/// The id of the thread managing the control
-	monitor::concurrency::thread _loopTh;	
+	/// The id of the thread managing the control of cpu
+	monitor::concurrency::thread _cpuLoopTh;
+
+	/// The id of the thread managing the control of memory
+	monitor::concurrency::thread _memLoopTh;	
 
 	/// The cpu market
 	market::CpuMarket _cpuMarket;
@@ -29,6 +34,9 @@ namespace server {
 
 	/// The path of the log file
 	std::filesystem::path _logPath;
+
+	/// The mutex used to synchronize the different control loops
+	monitor::concurrency::mutex _mutex;
 	
     public:
 
@@ -65,19 +73,32 @@ namespace server {
 	/**
 	 * Main loop control the resource affectations
 	 */
-	void controlLoop (monitor::concurrency::thread t);
+	void cpuControlLoop (monitor::concurrency::thread t);
 
 	/**
 	 * Wait for the next frame
 	 */
-	void waitFrame ();
+	void waitCpuFrame ();
+
+	/**
+	 * Main loop control the resource affectations
+	 */
+	void memoryControlLoop (monitor::concurrency::thread t);
+
+	/**
+	 * Wait for the next frame
+	 */
+	void waitMemoryFrame ();
 	
 	/**
-	 * Dump the log of the controller
-	 * @params: 
-	 *   - path: the directory in which dump the logs
+	 * Dump the log of the cpu controller
 	 */
-	void dumpLogs () const;
+	void dumpCpuLogs () ;
+
+	/**
+	 * Dump the log of the memory controller
+	 */
+	void dumpMemoryLogs () ;
     };
     
 }

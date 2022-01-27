@@ -64,7 +64,7 @@ namespace server {
 	    }
 
 	    for (auto it : allocated) {
-		vms.find (it.first)-> second.getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (i suppose it makes some synchronization when a thread has no slice left)
+		vms.find (it.first)-> second-> getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (i suppose it makes some synchronization when a thread has no slice left)
 	    }
 	}
 
@@ -105,22 +105,22 @@ namespace server {
 	}
 
 
-	std::map <std::string, unsigned long> CpuMarket::sellBaseCycles (const std::map <std::string, LibvirtVM> & vms,
+	std::map <std::string, unsigned long> CpuMarket::sellBaseCycles (const std::map <std::string, LibvirtVM*> & vms,
 									 unsigned long & market,
 									 std::map <std::string, unsigned long> & buyers)
 	{
 	    std::map <std::string, unsigned long> allocated;
 	    for (auto & v : vms) {
-		unsigned long usage = v.second.getCpuController ().getConsumption ();
-		unsigned long max = v.second.vcpus () * 1000000;
+		unsigned long usage = v.second-> getCpuController ().getConsumption ();
+		unsigned long max = v.second-> vcpus () * 1000000;
 		unsigned long min = 100000; // 1/4 de vcpus is the lowest 
 		
-		unsigned long nominal = ((float) v.second.freq ()) / ((float) this-> _config.cpuFreq) * max;
-		unsigned long capp = v.second.getCpuController ().getAbsoluteCapping ();
+		unsigned long nominal = ((float) v.second-> freq ()) / ((float) this-> _config.cpuFreq) * max;
+		unsigned long capp = v.second-> getCpuController ().getAbsoluteCapping ();
 
 		
-		float perc_usage = v.second.getCpuController ().getRelativePercentConsumption () / 100.0f;
-		double slope = v.second.getCpuController ().getSlope ();	    
+		float perc_usage = v.second-> getCpuController ().getRelativePercentConsumption () / 100.0f;
+		double slope = v.second-> getCpuController ().getSlope ();	    
 		/**
 		 * We have three cases : 
 		 *  - 1) The VMs uses less than the decrease trigger

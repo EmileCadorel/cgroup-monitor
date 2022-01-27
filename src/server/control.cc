@@ -27,41 +27,61 @@ namespace server {
     }
 
     void Controller::start () {
-	this-> _loopTh = monitor::concurrency::spawn (this, &Controller::controlLoop);
+	this-> _cpuLoopTh = monitor::concurrency::spawn (this, &Controller::cpuControlLoop);
+	this-> _memLoopTh = monitor::concurrency::spawn (this, &Controller::memoryControlLoop);
     }
 
     void Controller::join () {
-	monitor::concurrency::join (this-> _loopTh);
+	monitor::concurrency::join (this-> _cpuLoopTh);
+	monitor::concurrency::join (this-> _memLoopTh);
     }
 
     void Controller::kill () {
-	monitor::concurrency::kill (this-> _loopTh);
+	monitor::concurrency::kill (this-> _cpuLoopTh);
+	monitor::concurrency::kill (this-> _memLoopTh);
     }
 
-    void Controller::controlLoop (monitor::concurrency::thread th) {
+    void Controller::cpuControlLoop (monitor::concurrency::thread th) {
 	for (;;) {
-	    this-> _libvirt.updateControllers ();
+	    this-> _libvirt.updateCpuControllers ();
 	    if (this-> _cpuMarketEnabled) {
-		this-> _cpuMarket.run ();
+	    	this-> _cpuMarket.run ();
 	    }
 
+	    this-> dumpCpuLogs ();	    
+	    this-> waitCpuFrame ();
+	}
+    }
+    
+    void Controller::waitCpuFrame () {
+	auto s = std::chrono::system_clock::now ();
+	auto r = 1.0f - this-> _cpuT.time_since_start ();
+	this-> _cpuT.sleep (r);
+	auto e = std::chrono::system_clock::now ();
+	this-> _cpuT.reset (e, (e - s));
+    }    
+
+
+    void Controller::memoryControlLoop (monitor::concurrency::thread) {
+	for (;;) {
+	    this-> _libvirt.updateMemoryControllers ();
 	    // if (this-> _memoryMarketEnabled) {
 	    // 	this-> _memoryMarket.run ();
 	    // }
 
-	    this-> dumpLogs ();	    
-	    this-> waitFrame ();
+	    this-> dumpMemoryLogs ();
+	    this-> waitMemoryFrame ();
 	}
     }
 
-    void Controller::waitFrame () {
+    void Controller::waitMemoryFrame () {
 	auto s = std::chrono::system_clock::now ();
-	auto r = 1.0f - this-> _t.time_since_start ();
-	this-> _t.sleep (r);
+	auto r = 1.0f - this-> _memT.time_since_start ();
+	this-> _memT.sleep (r);
 	auto e = std::chrono::system_clock::now ();
-	this-> _t.reset (e, (e - s));
+	this-> _memT.reset (e, (e - s));
     }    
-
+    
     void Controller::readCpuMarketConfig (const fs::path & path) {
 	std::ifstream f (path / "cpu-market.json");	
 	if (f.good ()) {
@@ -97,23 +117,48 @@ namespace server {
     }
 
     
-    void Controller::dumpLogs () const {
+    void Controller::dumpCpuLogs () {
 	json j;
 	j["time"] = logging::get_time ();
-	j["duration"] = this-> _t.time_since_start ();
+	j["cpu-duration"] = this-> _cpuT.time_since_start ();
 	if (this-> _libvirt.getRunningVMs ().size () != 0) {
 	    j["cpu-market"] = this-> _cpuMarket.dumpLogs ();
+	    //j["memory-market"] = this-> _memoryMarket.dumpLogs ();
 	    json j2;
 	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
-		j2 [v.first] = v.second.getCpuController ().dumpLogs ();
+		j2 [v.first] = v.second-> getCpuController ().dumpLogs ();
 	    }
 	    
 	    j["cpu-control"] = j2;
 	}
-	
+
+	this-> _mutex.lock ();
 	std::ofstream f (this-> _logPath, std::ios_base::app);
 	f << j.dump () << std::endl;
 	f.close ();
+	this-> _mutex.unlock ();
     }
-    
+
+
+    void Controller::dumpMemoryLogs () {
+	json j;
+	j["time"] = logging::get_time ();
+	j["mem-duration"] = this-> _memT.time_since_start ();
+	if (this-> _libvirt.getRunningVMs ().size () != 0) {
+	    //j["memory-market"] = this-> _memoryMarket.dumpLogs ();
+	    json j2;
+	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
+		j2 [v.first] = v.second-> getMemoryController ().dumpLogs ();
+	    }
+	    
+	    j["mem-control"] = j2;
+	}
+
+	this-> _mutex.lock ();
+	std::ofstream f (this-> _logPath, std::ios_base::app);
+	f << j.dump () << std::endl;
+	f.close ();
+	this-> _mutex.unlock ();
+    }
+
 }

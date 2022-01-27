@@ -28,11 +28,9 @@ namespace monitor {
 	    concurrency::mutex _mutex;
 
 	    /// The list of running VMs
-	    std::map <std::string, LibvirtVM> _running;
+	    std::map <std::string, LibvirtVM*> _running;
 	    
 	public:
-
-	    friend LibvirtVM;
 	    
 	    /**
 	     * @params: 
@@ -71,9 +69,14 @@ namespace monitor {
 	     */
 
 	    /**
-	     * Update the controllers of the running VMs
+	     * Update the cpu controllers of the running VMs
 	     */
-	    void updateControllers ();
+	    void updateCpuControllers ();
+
+	    /**
+	     * Update the memory controllers of the running VMs
+	     */
+	    void updateMemoryControllers ();
 	    
 	    
 	    /**
@@ -111,16 +114,34 @@ namespace monitor {
 	    bool hasVM (const std::string & name);
 
 	    /**
-	     * @returns: the VM named 'name'
-	     * @throws: 
-	     *    - LibvirtError: if the vm does not exists	      
+	     * @returns: the pointer to the VM whose name is 'name', nullptr if there is none
 	     */
-	    LibvirtVM & getVM (const std::string & name);
-
+	    LibvirtVM * getVM (const std::string & name) ;
+	    
 	    /**
 	     * @returns: the running VMs on the host
 	     */
-	    std::map <std::string, LibvirtVM> & getRunningVMs ();
+	    std::map <std::string, LibvirtVM*> & getRunningVMs ();
+
+	    /**
+	     * Provision a new VM
+	     * @params: 
+	     *   - cfg: the configuration of the VM to provision
+	     *   - destPath: the destination path of the VM provisionning
+	     * @returns: the provisionned VM
+	     * @throws:
+	     *   - LibvirtError: if the provisionning failed
+	     */
+	    const LibvirtVM * provision (const utils::config::dict & cfg, const std::filesystem::path & destPath = "/tmp/");	    
+
+	    /**
+	     * Kill the VM that is running
+	     * @info: delete the associated drives
+	     * @params: 
+	     *   - vm: the name of the vm to kill
+	     *   - path: the location of the installed VM
+	     */
+	    void kill (const std::string & vm, const std::filesystem::path & path = "/tmp/");
 	    
 	    /**
 	     * ================================================================================
@@ -273,25 +294,7 @@ namespace monitor {
 	     */
 	    virDomainPtr retreiveDomain (const std::string & name);
 
-	    /**
-	     * Provision a new VM
-	     * @params: 
-	     *   - vm: the vm to provision
-	     *   - destPath: the destination path of the VM provisionning
-	     * @returns: the provisionned VM
-	     * @throws:
-	     *   - LibvirtError: if the provisionning failed
-	     */
-	    LibvirtVM & provision (LibvirtVM & vm, const std::filesystem::path & destPath = "/tmp/");	    
 
-	    /**
-	     * Kill the VM that is running
-	     * @info: delete the associated drives
-	     * @params: 
-	     *   - vm: the vm to kill
-	     *   - path: the location of the installed VM
-	     */
-	    LibvirtVM & kill (LibvirtVM & vm, const std::filesystem::path & path = "/tmp/");
 
 	    /**
 	     * ================================================================================

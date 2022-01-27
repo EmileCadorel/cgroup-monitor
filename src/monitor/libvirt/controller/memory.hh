@@ -38,16 +38,16 @@ namespace monitor {
 		 * ================================================================================
 		 */
 
-		/// The quantity of memory being used in KB (real RAM)
-		unsigned int _used;
+		/// The quantity of memory being used in KB, allocated on the host
+		unsigned int _hostUsed;
 
 		/// THe quantity of memory that is swapping in the VM in KB
 		unsigned int _swapping;
 
-		/// The quantity of RAM that is unused (from the domain, that is not aware of swapping) in KB
-		unsigned int _unused;
+		/// The quantity of memory being reclamed by the guest in KB (taken in host and swapping)
+		unsigned int _guestUsed;
 		
-		/// The quantity of memory that is allocated to the VM in KB
+		/// The quantity of memory that is allocated to the VM in KB (forced by the controller not the value acquired by monitoring)
 		unsigned int _allocated;
 
 		/// The maximum size of the memory that can be allocated to the VM in KB
@@ -77,7 +77,7 @@ namespace monitor {
 		 *    - context: the context of the memory controller
 		 *    - maxHistory: the maximum length of the history
 		 */
-		LibvirtMemoryController (LibvirtVM & context);
+		LibvirtMemoryController (LibvirtVM & context, int maxHistory = 5);
 
 		/**
 		 * ================================================================================
@@ -115,26 +115,34 @@ namespace monitor {
 		/**
 		 * @returns: the quantity of memory that is used by the VM in KB
 		 */
-		unsigned long getUsedMemory () const;
+		unsigned long getGuestUsed () const;
 
+		/**
+		 * @returns: the quantity of memory allocated by the domain on the host in KB
+		 */
+		unsigned long getHostUsed () const;
+		
 		/**
 		 * @returns: the quantity of swap in the VM in KB
 		 */
-		unsigned long getSwapMemory () const; 
+		unsigned long getSwapping () const; 
 
 		/**
-		 * @returns: the quantity of memory that is allocated to the VM in the host (memory that can be used before swapping)
+		 * @returns: the quantity of memory that is allocated to the VM in the host, that is forced by the controller 
+		 * @warning: might be a different value than getHostUsed (), but refer to the same thing
 		 */
-		unsigned long getAllocatedMemory () const;
+		unsigned long getAllocated () const;
 		
 		/**
-		 * @returns: the quantity of memory used by the VM in relation to the maximum allocation (without counting swap)
+		 * @returns: the quantity of memory used by the VM in relation to the maximum allocation
+		 * @warning: without swap
 		 */
 		float getAbsolutePercentUsed () const;
 
 
 		/**
-		 * @returns: the quantity of memory used by the VM in relation to the current allocation (without counting swap)
+		 * @returns: the quantity of memory used by the VM in relation to the current allocation
+		 * @warning: without swap
 		 */
 		float getRelativePercentUsed () const;
 
@@ -142,11 +150,6 @@ namespace monitor {
 		 * @returns: the slope of the used memory
 		 */
 		float getSlope () const;
-
-		/**
-		 * @returns: the slope of the swapping memory
-		 */
-		float getSwapSlope () const;
 			       		
 		/**
 		 * ================================================================================
@@ -161,7 +164,7 @@ namespace monitor {
 		 * @params:
 		 *   - max: the quantity of memory to allocate in KB
 		 */
-		void setAllocatedMemory (int max);
+		void setAllocatedMemory (unsigned long max);
 
 		/**
 		 * Remove the memory limitation of the VM
@@ -193,9 +196,9 @@ namespace monitor {
 		void addToHistory ();
 
 		/**
-		 * @returns: the slope of the list of points
+		 * compute the slope of the history
 		 */
-		float computeSwapSlope (const std::vector <float> & history);
+		void computeSlope ();
 		
 	    };
 

@@ -10,8 +10,7 @@ namespace monitor {
 
     namespace libvirt {
 
-	LibvirtVM::LibvirtVM (const utils::config::dict & cfg, LibvirtClient & context) :
-	    _context (context),
+	LibvirtVM::LibvirtVM (const utils::config::dict & cfg) :
 	    _cpuController (*this),
 	    _memoryController (*this)
 	{
@@ -31,13 +30,12 @@ namespace monitor {
 	}
 	    
 	
-	LibvirtVM::LibvirtVM (const std::string & name, LibvirtClient & context) :
+	LibvirtVM::LibvirtVM (const std::string & name) :
 	    _id (name),
 	    _userName ("phil"),
 	    _disk (10000),
 	    _vcpus (1),
 	    _mem (2048),
-	    _context (context),
 	    _cpuController (*this),
 	    _memoryController (*this)
 	{
@@ -147,11 +145,6 @@ namespace monitor {
 	 * ================================================================================
 	 */
 
-	void LibvirtVM::updateControllers () {
-	    this-> _cpuController.update ();
-	    this-> _memoryController.update ();
-	}
-
 	control::LibvirtCpuController & LibvirtVM::getCpuController () {
 	    return this-> _cpuController;
 	}
@@ -159,6 +152,14 @@ namespace monitor {
 	const control::LibvirtCpuController & LibvirtVM::getCpuController () const {
 	    return this-> _cpuController;
 	}
+
+	control::LibvirtMemoryController & LibvirtVM::getMemoryController () {
+	    return this-> _memoryController;
+	}
+
+	const control::LibvirtMemoryController & LibvirtVM::getMemoryController () const {
+	    return this-> _memoryController;
+	}	
 	
 	/**
 	 * ================================================================================
@@ -168,26 +169,6 @@ namespace monitor {
 	 * ================================================================================
 	 */
 
-
-	void LibvirtVM::provision () {
-	    if (this-> _dom == nullptr) {
-		this-> _context.provision (*this);
-		if (this-> _dom != nullptr) {
-		    this-> _memoryController.enable ();
-		}
-	    } else {
-		logging::warn ("VM", this-> _id, "is already provisionned");
-	    }
-	}
-
-	void LibvirtVM::kill () {
-	    if (this-> _dom != nullptr) {
-		this-> _context.kill (*this);
-		virDomainFree (this-> _dom);
-	    } else {
-		logging::warn ("VM", this-> _id, "is already down");
-	    }
-	}
 
 	LibvirtVM::~LibvirtVM () {
 	}

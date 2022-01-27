@@ -78,13 +78,12 @@ namespace server {
 	    auto inner = cfg.get<utils::config::dict> ("vm");
 	    auto name = inner.get<std::string> ("name");
 	    if (!this-> _libvirt.hasVM (name)) {
-		LibvirtVM vm (cfg, this-> _libvirt);
-		vm.provision ();
+		auto vm = this-> _libvirt.provision (cfg);
 		stream.sendInt (VMProtocol::IP);
-		auto ip = vm.ip ();
+		auto ip = vm-> ip ();
 		stream.sendInt (ip.length ());
 		stream.send (ip);
-		return;
+		return;		    		
 	    }
 	} catch (utils::exception & e) {
 	    e.print ();
@@ -99,8 +98,7 @@ namespace server {
 	auto name = stream.receive (len);
 	try {
 	    if (this-> _libvirt.hasVM (name)) {
-		auto vm = this-> _libvirt.getVM (name);
-		vm.kill ();
+		this-> _libvirt.kill (name);
 		stream.sendInt (VMProtocol::OK);
 		return;
 	    }
@@ -117,11 +115,13 @@ namespace server {
 	try {
 	    if (this-> _libvirt.hasVM (name)) {
 		auto vm = this-> _libvirt.getVM (name);
-		stream.sendInt (VMProtocol::IP);
-		auto ip = vm.ip ();
-		stream.sendInt (ip.length ());
-		stream.send (ip);
-		return;
+		if (vm != nullptr) {
+		    stream.sendInt (VMProtocol::IP);
+		    auto ip = vm-> ip ();
+		    stream.sendInt (ip.length ());
+		    stream.send (ip);
+		    return;
+		}
 	    }
 	} catch (...) {
 	}
@@ -136,12 +136,14 @@ namespace server {
 	try {
 	    if (this-> _libvirt.hasVM (name)) {
 		auto vm = this-> _libvirt.getVM (name);
-		auto host = stream.receiveInt ();
-		auto guest = stream.receiveInt ();
-
-		this-> _libvirt.openNat (vm, host, guest);
-		stream.sendInt (VMProtocol::OK);
-		return;
+		if (vm != nullptr) {
+		    auto host = stream.receiveInt ();
+		    auto guest = stream.receiveInt ();
+		    
+		    this-> _libvirt.openNat (*vm, host, guest);
+		    stream.sendInt (VMProtocol::OK);
+		    return;
+		}
 	    }
 	} catch (...) {
 	}

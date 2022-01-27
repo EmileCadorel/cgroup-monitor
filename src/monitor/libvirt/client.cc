@@ -76,9 +76,15 @@ namespace monitor {
 	 * ================================================================================
 	 */
 
-	void LibvirtClient::updateControllers () {
+	void LibvirtClient::updateCpuControllers () {
 	    for (auto & vm : this-> _running) {
-		vm.second.updateControllers ();
+		vm.second-> getCpuController ().update ();
+	    }
+	}
+
+	void LibvirtClient::updateMemoryControllers () {
+	    for (auto & vm : this-> _running) {
+		vm.second-> getMemoryController ().update ();
 	    }
 	}
 	
@@ -146,59 +152,74 @@ namespace monitor {
 	    return it != this-> _running.end ();
 	}
 
-	LibvirtVM & LibvirtClient::getVM (const std::string & name) {
+	LibvirtVM* LibvirtClient::getVM (const std::string & name) {
 	    this-> _mutex.lock ();
 	    auto it = this-> _running.find (name);
 	    this-> _mutex.unlock ();
 	    
-	    if (it == this-> _running.end ()) {
-		throw LibvirtError ("Not found : " + name);
+	    if (it != this-> _running.end ()) {
+		return it-> second;		
 	    }
 
-	    return it-> second;
+	    return nullptr;
 	}
+	
 
-	std::map <std::string, LibvirtVM> & LibvirtClient::getRunningVMs () {
+	std::map <std::string, LibvirtVM*> & LibvirtClient::getRunningVMs () {
 	    return this-> _running;
 	}
 	
        	
-	LibvirtVM & LibvirtClient::provision (LibvirtVM & vm, const std::filesystem::path & path) {
-	    auto vPath = path / ("v" + vm.id ());
+	const LibvirtVM * LibvirtClient::provision (const utils::config::dict & cfg, const std::filesystem::path & path) {
+	    auto vm = new LibvirtVM (cfg);
+	    try {
+		this-> kill (vm-> id ());
 	    
-	    // Prepare the different file required for the VM booting
-	    this-> createDirAndVMFile (vm, vPath);
-
-	    // install the VM on the host using virsh
-	    this-> installVM (vm, vPath);
-
-	    // wait the ip of the VM
-	    this-> waitIpVM (vm, vPath);
-
-	    logging::success ("VM", vm.id (), "is ready at ip : ", vm.ip ());
+		auto vPath = path / ("v" + vm-> id ());
 	    
-	    this-> _running.erase (vm.id ());
+		// Prepare the different file required for the VM booting
+		this-> createDirAndVMFile (*vm, vPath);
 
-	    vm._dom = this-> retreiveDomain (vm.id ());
-	    this-> _running.emplace (vm.id (), vm);
+		// install the VM on the host using virsh
+		this-> installVM (*vm, vPath);
+
+		// wait the ip of the VM
+		this-> waitIpVM (*vm, vPath);
+
+		logging::success ("VM", vm-> id (), "is ready at ip : ", vm-> ip ());
 	    
-	    return vm;
+		vm-> _dom = this-> retreiveDomain (vm-> id ());
+	    
+		vm-> getCpuController ().enable ();
+		vm-> getMemoryController ().enable ();
+	    
+		this-> _running.emplace (vm-> id (), vm);
+
+		return vm;
+	    } catch (LibvirtError err) {
+		this-> _running.erase (vm-> id ());
+		delete vm;
+		throw err;
+	    }
 	}
 
 
-	LibvirtVM & LibvirtClient::kill (LibvirtVM & vm, const std::filesystem::path & path) {
-	    auto vPath = path / ("v" + vm.id ());
+	void LibvirtClient::kill (const std::string & vm, const std::filesystem::path & path) {
+	    auto v = this-> _running.find (vm);
+	    if (v != this-> _running.end ()) {
+		auto vPath = path / ("v" + v-> second-> id ());
+		
+		// Kill the domain
+		this-> killDomain (*v-> second);
 
-	    // Kill the domain
-	    this-> killDomain (vm);
+		// Destroy the vm file, and associated disks
+		this-> deleteDirAndVMFile (*v-> second, vPath);
 
-	    // Destroy the vm file, and associated disks
-	    this-> deleteDirAndVMFile (vm, vPath);
-
-	    logging::success ("VM", vm.id (), "is killed");
-	    this-> _running.erase (vm.id ());
-	    
-	    return vm;
+		logging::success ("VM", v-> second-> id (), "is killed");
+		
+		this-> _running.erase (v-> second-> id ());
+		delete v-> second;		
+	    }
 	}
 	
 	/**
