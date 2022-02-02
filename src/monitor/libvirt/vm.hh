@@ -45,6 +45,10 @@ namespace monitor {
 
 	    /// The frequence of the VM in MHz
 	    int _freq;
+
+	    /// The sla of the memory (% of guarantee of the VM before swap)
+	    /// For example, 2GB VM, with SLA of 0.5, 1GB is guaranteed, and the other may swap
+	    float _memorySLA;
 	    
 	    /// The ip address of the VM
 	    std::string _ip;
@@ -142,7 +146,18 @@ namespace monitor {
 	     */
 	    int disk () const;
 
-
+	    /**
+	     * Set the sla of the memory usage (default is 0.5)
+	     * @params: 
+	     *   - sla: the sla of the memory (between 0 and 1)
+	     */
+	    LibvirtVM & memorySLA (float sla);
+	    
+	    /**
+	     * @returns: the sla of the memory
+	     */
+	    float memorySLA () const;
+	    
 	    /**
 	     * Set the size of the memory of the VM (default is 2G)
 	     * @params: 

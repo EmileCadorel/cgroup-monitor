@@ -31,65 +31,41 @@ namespace monitor {
 		/// The memory of the VM might have been changed during its boot process
 		this-> _max = this-> _context.memory () * 1024;
 		this-> _allocated = this-> _max;
+		this-> _minGuarantee = (unsigned long) (this-> _context.memorySLA () * ((double) this-> _max));
 		
-		// /// Set the period otherwise we cannot read
+		// Set the period otherwise we cannot read
 		if (virDomainSetMemoryStatsPeriod (this-> _context._dom, 1, 0) < 0) {
 		    logging::error ("Unable to change balloon collection period");
 		    exit (-1);
 		}
-
-		// /// Set the hard limit of the VM memory usage, to be able to reduce it later on
-		virTypedParameterPtr params = nullptr;
-		int nparams = 0, maxparams = 0;		
-		virTypedParamsAddULLong (&params, &nparams, &maxparams, VIR_DOMAIN_MEMORY_HARD_LIMIT, this-> _max);		
-		if (virDomainSetMemoryParameters (this-> _context._dom,
-						  params,
-						  nparams, 0) < 0) {
-		    logging::error ("Failed to set memory hard limit of VM :", this-> _context.id (), ":", this-> _max);
-		    exit (-1);
-		}
 		
-		virTypedParamsFree (params, nparams);
-		
-		// Set the swap hard limit of the VM memory usage, to enable swapping when the hard limit will be reduced
-		params = nullptr;
-		nparams = 0; maxparams = 0;
-		virTypedParamsAddULLong (&params, &nparams, &maxparams, VIR_DOMAIN_MEMORY_SWAP_HARD_LIMIT, this-> _max);		
-		if (virDomainSetMemoryParameters (this-> _context._dom,
-						  params,
-						  nparams, 0) < 0) {
-		    logging::error ("Failed to set memory swap limit of VM :", this-> _context.id (), ":", this-> _max);
-		    exit (-1);
-		}
-	       
-		virTypedParamsFree (params, nparams);		    		
+		this-> _max -= 128; // we remove 128 because max must be lower than swap max, otherwise the VM can crash !
+		this-> _allocated = this-> _max;
 	    }
 	    
-	    void LibvirtMemoryController::update () {
-		this-> _max = this-> _context.memory () * 1024;
-		
+	    void LibvirtMemoryController::update () {		
 		virDomainMemoryStatStruct stats [VIR_DOMAIN_MEMORY_STAT_NR];
-		auto s = std::chrono::system_clock::now ();
 		auto nr_stats = virDomainMemoryStats (this-> _context._dom, stats, VIR_DOMAIN_MEMORY_STAT_NR, 0);
-		auto e = std::chrono::system_clock::now ();
-		std::chrono::duration<double> since = e - s;
-		std::cout << "Reading : " << since.count () << " " << nr_stats << std::endl;
-		unsigned long unused;
+		
+		unsigned long unused, usable;
 		for (int i = 0 ; i < nr_stats ; i++) {
 		    if (stats [i].tag == VIR_DOMAIN_MEMORY_STAT_RSS) {
 			this-> _hostUsed = stats [i].val; 
 		    } else if (stats [i].tag == VIR_DOMAIN_MEMORY_STAT_UNUSED) {
 			unused = stats [i].val;
+		    } else if (stats [i].tag == VIR_DOMAIN_MEMORY_STAT_AVAILABLE) {
+			usable = stats [i].val;
 		    }
 		}
 		
-		this-> _guestUsed = this-> _max - unused;
+		this-> _guestUsed = usable - unused;
 		if (this-> _hostUsed < this-> _guestUsed) {
 		    this-> _swapping = this-> _guestUsed - this-> _hostUsed;
-		    this-> _guestUsed = this-> _hostUsed;
 		} else {
 		    this-> _swapping = 0;
 		}
+
+		this-> addToHistory ();
 
 		logging::info ("Unused :", unused, "host:", this-> _hostUsed, "guest :", this-> _guestUsed, "max :", this-> _max, "swap :", this-> _swapping);
 	    }	    	    
@@ -103,6 +79,10 @@ namespace monitor {
 	     */
 
 
+	    unsigned long LibvirtMemoryController::getMinGuarantee () const {
+		return this-> _minGuarantee;
+	    }
+	    
 	    unsigned long LibvirtMemoryController::getMaxMemory () const {
 		return this-> _max;
 	    }
@@ -149,21 +129,28 @@ namespace monitor {
 	     */
 	   
 	    void LibvirtMemoryController::setAllocatedMemory (unsigned long max) {
-		this-> _allocated = max;
-
-		virTypedParameterPtr params = nullptr;
-		int nparams = 0, maxparams = 0;
-		virTypedParamsAddULLong (&params, &nparams, &maxparams, VIR_DOMAIN_MEMORY_HARD_LIMIT, this-> _allocated * 1024);
-		
-		if (virDomainSetMemoryParameters (this-> _context._dom,
-						  params,
-						  nparams, 0) != 0) {
-		    logging::error ("Failed to set memory hard limit of VM :", this-> _context.id (), ":", this-> _allocated);
-		    exit (-1);
+		std::cout << (this-> _allocated / 1024 / 102) << " " << (max / 1024 / 102) << std::endl;
+		if (this-> _allocated / 1024 / 102 != max / 1024 / 102) {
+		    this-> _allocated = std::min (max, (unsigned long) (this-> _max));
+		    logging::info ("VM capping", this-> _context.id (), ":", this-> _allocated, "/", this-> _max);
+		    virDomainSetMemoryFlags (this-> _context._dom, this-> _allocated, VIR_DOMAIN_AFFECT_LIVE);
 		}
 		
-		virTypedParamsFree (params, nparams);
+		// virTypedParameterPtr params = nullptr;
+		// int nparams = 0, maxparams = 0;		    
+		// virTypedParamsAddULLong (&params, &nparams, &maxparams, VIR_DOMAIN_MEMORY_HARD_LIMIT, this-> _allocated);
+
+		// int i = virDomainSetMemoryParameters (this-> _context._dom,
+		// 				      params,
+		// 				      nparams, 0);
+		// if (i < 0) {
+		//     logging::error ("Failed to set memory swap limit of VM :", this-> _context.id (), ":", this-> _allocated + 128);
+		//     exit (-1);
+		// }
+		    
+		// virTypedParamsFree (params, nparams);		    
 	    }
+
 
 	    void LibvirtMemoryController::unlimit () {
 		this-> setAllocatedMemory (this-> _max);
@@ -202,7 +189,11 @@ namespace monitor {
 		if (this-> _history.size () > this-> _maxHistory) {
 		    this-> _history.erase (this-> _history.begin ());
 		}
-
+		
+		for (auto & it : this-> _history) {
+		    std::cout << it << ", ";
+		}
+		std::cout << std::endl;
 		if (this-> _history.size () == this-> _maxHistory) this-> computeSlope ();
 	    }
 

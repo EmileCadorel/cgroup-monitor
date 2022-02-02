@@ -3,6 +3,7 @@
 #include <monitor/concurrency/_.hh>
 #include <monitor/libvirt/_.hh>
 #include "market/cpu.hh"
+#include "market/memory.hh"
 #include <nlohmann/json.hpp>
 
 namespace server {
@@ -15,7 +16,8 @@ namespace server {
 	/// The timer used to compute cpu frame time, and run the controller at the correct pace
 	monitor::concurrency::timer _cpuT;
 
-	monitor::concurrency::timer _memT;
+	/// The timer used to compute memory frame time, and run the controller at the correct pace
+	monitor::concurrency::timer _memT;	
 	
 	/// The libvirt connection
 	monitor::libvirt::LibvirtClient & _libvirt;
@@ -31,6 +33,12 @@ namespace server {
 	
 	/// True iif the cpu market has to be executed
 	bool _cpuMarketEnabled;
+
+	/// The memory market
+	market::MemoryMarket _memMarket;
+
+	/// True iif the mem market has to be executed
+	bool _memMarketEnabled;	
 
 	/// The path of the log file
 	std::filesystem::path _logPath;
@@ -69,6 +77,13 @@ namespace server {
 	 *   - path: the path of the config directory of the controller
 	 */
 	void readCpuMarketConfig (const std::filesystem::path & path = "/var/lib/dio");
+
+	/**
+	 * Read the configuration file of the mem market 
+	 * @params: 
+	 *   - path: the path of the config directory of the controller
+	 */
+	void readMemMarketConfig (const std::filesystem::path & path = "/var/lib/dio");
 	
 	/**
 	 * Main loop control the resource affectations

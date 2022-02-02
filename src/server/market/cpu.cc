@@ -64,7 +64,7 @@ namespace server {
 	    }
 
 	    for (auto it : allocated) {
-		vms.find (it.first)-> second-> getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (i suppose it makes some synchronization when a thread has no slice left)
+		vms.find (it.first)-> second-> getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (I suppose it makes some synchronization when a thread has no slice left)
 	    }
 	}
 

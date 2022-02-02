@@ -28,7 +28,7 @@ namespace monitor {
 	    _conn (nullptr), _uri (uri)
 	{
 	    if (getuid()) {
-		logging::error ("you are not root. This program will only word if run as root.");
+		logging::error ("you are not root. This program will only work if run as root.");
 		exit(1);
 	    }
 	    
@@ -42,6 +42,16 @@ namespace monitor {
 	 * ================================================================================
 	 * ================================================================================
 	 */
+
+	void LibvirtClient::setKeyPath (const std::filesystem::path & path) {
+	    this-> _keyPath = path;
+	    std::ifstream f (path / "key.pub");
+	    std::stringstream ss;
+	    ss << f.rdbuf ();
+	    this-> _pubKey = ss.str ();
+	    this-> _pubKey = this-> _pubKey.substr (0, this-> _pubKey.length () - 1); // remove final \n
+	    f.close ();
+	}
        
 	void LibvirtClient::connect () {
 	    // First disconnect, maybe it was connected to something
@@ -186,6 +196,12 @@ namespace monitor {
 		// wait the ip of the VM
 		this-> waitIpVM (*vm, vPath);
 
+		// Attach the swap disk to the VM
+		this-> attachSwapDisk (*vm, vPath);
+
+		// Mount the swap space on the VM
+		this-> mountSwap (*vm, vPath);
+
 		logging::success ("VM", vm-> id (), "is ready at ip : ", vm-> ip ());
 	    
 		vm-> _dom = this-> retreiveDomain (vm-> id ());
@@ -247,6 +263,7 @@ namespace monitor {
 		this-> resizeImage (vm, vPath);
 
 		// Prepare the image for booting
+		this-> createSwapDisk (vm, vPath);
 		this-> prepareImage (vm, vPath);
 		
 	    } catch (std::exception & e) {
@@ -261,8 +278,9 @@ namespace monitor {
 	    ss << "#cloud-config" << std::endl << "---" << std::endl;
 	    ss << "users:" << std::endl;
 	    ss << "- name: " << vm.user () << std::endl;
+	    ss << "  password: " << vm.user () << std::endl;
 	    ss << "  shell: /bin/bash" << std::endl;
-	    ss << "  ssh-authorized-keys: [" << vm.pubKey () << "]" << std::endl;
+	    ss << "  ssh-authorized-keys: [" << vm.pubKey () << "," << this-> _pubKey << "]" << std::endl;
 	    ss << "  groups: wheel" << std::endl;
 	    ss << "  sudo: ['ALL=(ALL) NOPASSWD:ALL']" << std::endl;
 	    ss << "  lock_passwd: 'false'" << std::endl;
@@ -317,7 +335,18 @@ namespace monitor {
 	    }
 	}
 
-
+	void LibvirtClient::createSwapDisk (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
+	    std::stringstream mem;
+	    mem << vm.memory () << "M";
+	    auto proc = concurrency::SubProcess ("qemu-img", {"create", "-f", "raw", "swap-space.img", mem.str ()}, vPath);
+	    proc.start ();
+	    
+	    if (proc.wait () != 0) {
+		std::cout << "ERROR : " << proc.stderr ().read () << std::endl;
+		std::cout << "OUT : " << proc.stdout ().read () << std::endl;
+	    }	    
+	}
+	
 	void LibvirtClient::installVM (const LibvirtVM & vm, const std::filesystem::path & path) {
 	    std::stringstream mem, cpu;
 	    mem << vm.memory ();
@@ -387,7 +416,36 @@ namespace monitor {
 
 	    vm.mac (mac).ip (ip);
 	}
+	
+	void LibvirtClient::attachSwapDisk (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
+	    auto proc = concurrency::SubProcess ("virsh", {"attach-disk", "v" + vm.id (), (vPath / "swap-space.img").c_str (), "--target", "vdb", "--persistent"}, vPath);
 
+	    proc.start ();
+	    
+	    if (proc.wait () != 0) {
+		std::cout << "ERROR : " << proc.stderr ().read () << std::endl;
+		std::cout << "OUT : " << proc.stdout ().read () << std::endl;
+	    }	    	    
+	}
+
+
+	void LibvirtClient::mountSwap (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
+	    std::stringstream ss;
+	    ss << vm.user () << "@" << vm.ip ();
+	    for (;;) {
+		auto proc = concurrency::SubProcess ("ssh", {"-o", "StrictHostKeyChecking=no", ss.str (), "-i", (this-> _keyPath / "key").c_str (), "sudo mkswap /dev/vdb ; sudo swapon /dev/vdb"}, vPath);
+		proc.start ();
+		
+		if (proc.wait () != 0) {		    
+		    concurrency::timer t;
+		    t.sleep (0.5);
+		} else {
+		    break;
+		}
+	    } 
+	}
+	
+	
 	/**
 	 * ================================================================================
 	 * ================================================================================
@@ -407,11 +465,13 @@ namespace monitor {
 	    auto metaFile = path / ("meta-data");
 	    auto userFile = path / ("user-data");
 	    auto qcowFile = path / ("v" + vm.id () + ".qcow2");
+	    auto swapFile = path / ("swap-space.img");
 
 	    ::remove (isoFile.c_str ());
 	    ::remove (metaFile.c_str ());
-	    ::remove (userFile.c_str ());
+	    ::remove (userFile.c_str ());	    
 	    ::remove (qcowFile.c_str ());
+	    ::remove (swapFile.c_str ());
 	}
 
 

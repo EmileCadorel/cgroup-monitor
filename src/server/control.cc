@@ -18,9 +18,12 @@ namespace server {
     Controller::Controller (monitor::libvirt::LibvirtClient & client) :
 	_libvirt (client),
 	_cpuMarket (client),
-	_cpuMarketEnabled (false)
+	_cpuMarketEnabled (false),
+	_memMarket (client),
+	_memMarketEnabled (false)
     {
 	this-> readCpuMarketConfig ();
+	this-> readMemMarketConfig ();
 
     	fs::create_directories ("/var/log/dio");
 	this-> _logPath = fs::path ("/var/log/dio/") / std::string (("control-log-" + logging::get_time_no_space () + ".json"));
@@ -65,9 +68,9 @@ namespace server {
     void Controller::memoryControlLoop (monitor::concurrency::thread) {
 	for (;;) {
 	    this-> _libvirt.updateMemoryControllers ();
-	    // if (this-> _memoryMarketEnabled) {
-	    // 	this-> _memoryMarket.run ();
-	    // }
+	    if (this-> _memMarketEnabled) {
+	    	this-> _memMarket.run ();
+	    }
 
 	    this-> dumpMemoryLogs ();
 	    this-> waitMemoryFrame ();
@@ -116,6 +119,40 @@ namespace server {
 	}
     }
 
+    void Controller::readMemMarketConfig (const fs::path & path) {
+	std::ifstream f (path / "mem-market.json");	
+	if (f.good ()) {
+	    std::stringstream ss;
+	    ss << f.rdbuf ();
+	    f.close ();
+	    auto j = json::parse (ss.str ());
+
+	    if (j.contains ("enable") && j["enable"].is_boolean ()) {
+		this-> _memMarketEnabled = j["enable"].get<bool> ();
+	    }
+
+	    if (this-> _memMarketEnabled) {
+		auto marketConfig = market::MemoryMarketConfig {
+		    j["memory"].get<unsigned long> (),
+		    j["trigger-increment"].get<float> () / 100.0f,
+		    j["trigger-decrement"].get<float> () / 100.0f,
+		    j["increment-speed"].get<float> () / 100.0f,
+		    j["decrement-speed"].get<float> () / 100.0f,
+		    j["window-size"].get<unsigned long> ()
+		};
+		this-> _memMarket.setConfig (marketConfig);
+	    }	    	    
+	} else {
+	    this-> _memMarketEnabled = false;
+	}
+
+	if (this-> _memMarketEnabled) {
+	    logging::info ("MEM Market enabled");
+	} else {
+	    logging::warn ("MEM Market disabled");
+	}
+    }
+
     
     void Controller::dumpCpuLogs () {
 	json j;
@@ -123,7 +160,6 @@ namespace server {
 	j["cpu-duration"] = this-> _cpuT.time_since_start ();
 	if (this-> _libvirt.getRunningVMs ().size () != 0) {
 	    j["cpu-market"] = this-> _cpuMarket.dumpLogs ();
-	    //j["memory-market"] = this-> _memoryMarket.dumpLogs ();
 	    json j2;
 	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
 		j2 [v.first] = v.second-> getCpuController ().dumpLogs ();
@@ -145,7 +181,7 @@ namespace server {
 	j["time"] = logging::get_time ();
 	j["mem-duration"] = this-> _memT.time_since_start ();
 	if (this-> _libvirt.getRunningVMs ().size () != 0) {
-	    //j["memory-market"] = this-> _memoryMarket.dumpLogs ();
+	    j["memory-market"] = this-> _memMarket.dumpLogs ();
 	    json j2;
 	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
 		j2 [v.first] = v.second-> getMemoryController ().dumpLogs ();

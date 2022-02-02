@@ -29,6 +29,12 @@ namespace monitor {
 
 	    /// The list of running VMs
 	    std::map <std::string, LibvirtVM*> _running;
+
+	    /// The key used to connect to VM 
+	    std::string _pubKey;
+
+	    /// The directory containing monitor keys
+	    std::filesystem::path _keyPath;
 	    
 	public:
 	    
@@ -60,6 +66,11 @@ namespace monitor {
 	     */
 	    void disconnect ();
 
+	    /**
+	     * Set the path to the key directory
+	     */
+	    void setKeyPath (const std::filesystem::path & path);
+	    
 	    /**
 	     * ================================================================================
 	     * ================================================================================
@@ -198,7 +209,7 @@ namespace monitor {
 	     * Create the user data file used to configure the VM provisionning
 	     * User data are the name of the user, and the keyfile used to connect to the VM through ssh
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void createUserData (const LibvirtVM & vm, const std::filesystem::path & path) const;
@@ -207,7 +218,7 @@ namespace monitor {
 	     * Create the meta data file used to configure the VM provisionning
 	     * Meta data is some data info about the vm (instance name, and hostname)
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void createMetaData (const LibvirtVM & vm, const std::filesystem::path & path) const;
@@ -215,7 +226,7 @@ namespace monitor {
 	    /**
 	     * Create the ISO file for the meta and user data of the VM before provisionning
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void createISOData (const LibvirtVM & vm, const std::filesystem::path & path) const;
@@ -223,7 +234,7 @@ namespace monitor {
 	    /**
 	     * Resize the image file of the VM
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void resizeImage (const LibvirtVM & vm, const std::filesystem::path & path) const;
@@ -231,16 +242,29 @@ namespace monitor {
 	    /**
 	     * Prepare the image disk before provisionning
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void prepareImage (const LibvirtVM & vm, const std::filesystem::path & path) const;
 
 	    /**
+	     * Create the disk used for swapping inside the VM
+	     * @params: 
+	     *   - vm: the vm to provision
+	     *   - path: the directory path of the provisionning
+	     */
+	    void createSwapDisk (const LibvirtVM & vm, const std::filesystem::path & path) const;
+
+	    /**
+	     * Attach the swap disk to the VM
+	     */
+	    void attachSwapDisk (const LibvirtVM & vm, const std::filesystem::path & path) const;
+	    
+	    /**
 	     * Install the VM using virsh
 	     * @synchronized
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm to provision
 	     *   - path: the directory path of the provisionning
 	     */
 	    void installVM (const LibvirtVM & vm, const std::filesystem::path & path);
@@ -248,11 +272,19 @@ namespace monitor {
 	    /**
 	     * Wait until the ip address of the VM is available
 	     * @params: 
-	     *   - vm: the vm to being provisionned
+	     *   - vm: the vm being provisionned
 	     *   - path: the directory path of the provisionning
 	     */
 	    void waitIpVM (LibvirtVM & vm, const std::filesystem::path & path);
 
+	    /**
+	     * Mount the swap disk on the VM
+	     * @params: 
+	     *   - vm: the vm to provision
+	     *   - path: the directory path of the provisionning
+	     */
+	    void mountSwap (const LibvirtVM & vm, const std::filesystem::path & path) const;
+	    
 	    /**
 	     * ================================================================================
 	     * ================================================================================

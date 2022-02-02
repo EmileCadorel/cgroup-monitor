@@ -22,6 +22,7 @@ namespace monitor {
 	    this-> _vcpus = inner.getOr<int> ("vcpus", 1);
 	    this-> _mem = inner.getOr <int> ("memory", 2048);
 	    this-> _freq = inner.getOr<int> ("frequency", 1000);
+	    this-> _memorySLA = inner.getOr <float> ("memorySLA", 0.5);
 	    
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (inner.getOr <std::string> ("ssh_key", std::string ((home / ".ssh/id_rsa.pub").c_str ())));
@@ -36,6 +37,7 @@ namespace monitor {
 	    _disk (10000),
 	    _vcpus (1),
 	    _mem (2048),
+	    _memorySLA (0.5),
 	    _cpuController (*this),
 	    _memoryController (*this)
 	{
@@ -91,6 +93,14 @@ namespace monitor {
 	    return this-> _disk;
 	}
 
+	LibvirtVM & LibvirtVM::memorySLA (float sla) {
+	    this-> _memorySLA = sla;
+	    return *this;
+	}
+
+	float LibvirtVM::memorySLA () const {
+	    return this-> _memorySLA;
+	}
 	
 	LibvirtVM & LibvirtVM::memory (int size) {
 	    this-> _mem = size;

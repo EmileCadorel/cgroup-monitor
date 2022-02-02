@@ -53,6 +53,9 @@ namespace monitor {
 		/// The maximum size of the memory that can be allocated to the VM in KB
 		unsigned int _max;
 
+		/// The minimal quantity of memory to guarantee for the VM without swap
+		unsigned int _minGuarantee;
+
 		/**
 		 * ================================================================================
 		 * ================================================================================
@@ -107,6 +110,11 @@ namespace monitor {
 		 * ================================================================================
 		 */
 
+		/**
+		 * @returns: the minimal quantity of memory that has to be guaranteed without swap for the VM
+		 */
+		unsigned long getMinGuarantee () const;
+		
 		/**
 		 * @returns: the maximum quantity of memory that can be allocated to the VM in KB
 		 */
@@ -165,6 +173,8 @@ namespace monitor {
 		 *   - max: the quantity of memory to allocate in KB
 		 */
 		void setAllocatedMemory (unsigned long max);
+
+		void setAllocatedMemoryNoSwap (unsigned long max);
 
 		/**
 		 * Remove the memory limitation of the VM

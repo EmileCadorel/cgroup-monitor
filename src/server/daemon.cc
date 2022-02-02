@@ -9,6 +9,7 @@ namespace server {
     {}
 
     void Daemon::start () {
+	this-> _libvirt.setKeyPath ("/var/lib/dio/keys");
 	this-> _libvirt.connect ();
 	this-> _vms.start ();
 	this-> _controller.start ();
