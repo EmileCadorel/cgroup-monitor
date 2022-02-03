@@ -15,6 +15,9 @@ cmake ..
 make -j4
 make install DESTDIR=${INSTALL_DIR}/dio/install
 
+mkdir -p ${INSTALL_DIR}/dio/install/var/lib/dio
+cp -r ${INSTALL_DIR}/dio/src/lib/* ${INSTALL_DIR}/dio/install/var/lib/dio/
+
 cd ${INSTALL_DIR}/dio/bin
 fpm -s dir -t deb -n libdio-${VERSION} -v ${VERSION} -C ${INSTALL_DIR}/dio/install \
     -p qemu-kvm \
@@ -26,5 +29,5 @@ fpm -s dir -t deb -n libdio-${VERSION} -v ${VERSION} -C ${INSTALL_DIR}/dio/insta
     -p nfs-common \
     -p libguestfs-tools \
     -p dnsmasq-utils \
-    usr/bin
+    usr/bin /var/lib/dio/cpu-market.json /var/lib/dio/daemon.json /var/lib/dio/mem-market.json /var/lib/dio/keys/key /var/lib/dio/keys/key.pub
 
