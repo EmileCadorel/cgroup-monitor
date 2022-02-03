@@ -31,7 +31,7 @@ namespace monitor {
 		/// The memory of the VM might have been changed during its boot process
 		this-> _max = this-> _context.memory () * 1024;
 		this-> _allocated = this-> _max;
-		this-> _minGuarantee = (unsigned long) (this-> _context.memorySLA () * ((double) this-> _max));
+		this-> _minGuarantee = std::max ((unsigned long) (this-> _context.memorySLA () * ((double) this-> _max)), (unsigned long) 1048576);
 		
 		// Set the period otherwise we cannot read
 		if (virDomainSetMemoryStatsPeriod (this-> _context._dom, 1, 0) < 0) {
@@ -66,8 +66,6 @@ namespace monitor {
 		}
 
 		this-> addToHistory ();
-
-		logging::info ("Unused :", unused, "host:", this-> _hostUsed, "guest :", this-> _guestUsed, "max :", this-> _max, "swap :", this-> _swapping);
 	    }	    	    
 
 	    /**
@@ -129,26 +127,12 @@ namespace monitor {
 	     */
 	   
 	    void LibvirtMemoryController::setAllocatedMemory (unsigned long max) {
-		std::cout << (this-> _allocated / 1024 / 102) << " " << (max / 1024 / 102) << std::endl;
 		if (this-> _allocated / 1024 / 102 != max / 1024 / 102) {
-		    this-> _allocated = std::min (max, (unsigned long) (this-> _max));
+		    auto alloc = (max / 1024 / 102) * (102 * 1024);
+		    this-> _allocated = std::min (alloc, (unsigned long) (this-> _max));
 		    logging::info ("VM capping", this-> _context.id (), ":", this-> _allocated, "/", this-> _max);
 		    virDomainSetMemoryFlags (this-> _context._dom, this-> _allocated, VIR_DOMAIN_AFFECT_LIVE);
 		}
-		
-		// virTypedParameterPtr params = nullptr;
-		// int nparams = 0, maxparams = 0;		    
-		// virTypedParamsAddULLong (&params, &nparams, &maxparams, VIR_DOMAIN_MEMORY_HARD_LIMIT, this-> _allocated);
-
-		// int i = virDomainSetMemoryParameters (this-> _context._dom,
-		// 				      params,
-		// 				      nparams, 0);
-		// if (i < 0) {
-		//     logging::error ("Failed to set memory swap limit of VM :", this-> _context.id (), ":", this-> _allocated + 128);
-		//     exit (-1);
-		// }
-		    
-		// virTypedParamsFree (params, nparams);		    
 	    }
 
 
@@ -168,7 +152,6 @@ namespace monitor {
 		nlohmann::json j;
 		j["host-usage"] = this-> getHostUsed ();
 		j["guest-usage"] = this-> getGuestUsed ();
-		j["swapping"] = this-> getSwapping ();
 		j["allocated"] = this-> getAllocated ();
 		j["slope"] = this-> getSlope ();
 		
@@ -188,12 +171,8 @@ namespace monitor {
 		this-> _history.push_back (this-> getAbsolutePercentUsed ());
 		if (this-> _history.size () > this-> _maxHistory) {
 		    this-> _history.erase (this-> _history.begin ());
-		}
-		
-		for (auto & it : this-> _history) {
-		    std::cout << it << ", ";
-		}
-		std::cout << std::endl;
+		}		
+
 		if (this-> _history.size () == this-> _maxHistory) this-> computeSlope ();
 	    }
 

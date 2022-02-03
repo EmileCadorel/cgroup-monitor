@@ -26,7 +26,8 @@ namespace server {
 	this-> readMemMarketConfig ();
 
     	fs::create_directories ("/var/log/dio");
-	this-> _logPath = fs::path ("/var/log/dio/") / std::string (("control-log-" + logging::get_time_no_space () + ".json"));
+	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());
+	this-> _logPath = fs::path ("/var/log/dio/control-log.json");
     }
 
     void Controller::start () {

@@ -28,15 +28,16 @@ file(
 )
 
 find_package(nlohmann_json 3.7.3 REQUIRED)
-add_executable (monitor ${SRC_COMMON} ${SRC_SERVER})
-add_executable (client ${SRC_COMMON} ${SRC_CLIENT})
-add_executable (debug ${SRC_COMMON} ${SRC_DEBUG})
+add_executable (dio-monitor ${SRC_COMMON} ${SRC_SERVER})
+add_executable (dio-client ${SRC_COMMON} ${SRC_CLIENT})
+add_executable (dio-debug ${SRC_COMMON} ${SRC_DEBUG})
 
-target_link_libraries (monitor -lpthread -lbfd -lvirt nlohmann_json::nlohmann_json)
-target_link_libraries (client -lpthread -lbfd -lvirt  nlohmann_json::nlohmann_json)
-target_link_libraries (debug -lpthread -lbfd -lvirt  nlohmann_json::nlohmann_json)
+target_link_libraries (dio-monitor -lpthread -lbfd -lvirt nlohmann_json::nlohmann_json)
+target_link_libraries (dio-client -lpthread -lbfd -lvirt  nlohmann_json::nlohmann_json)
+target_link_libraries (dio-debug -lpthread -lbfd -lvirt  nlohmann_json::nlohmann_json)
 
 include_directories(${CMAKE_SOURCE_DIR}/src/)
+install (TARGETS dio-client dio-monitor DESTINATION /usr/bin/)
 
 
 

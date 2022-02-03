@@ -112,10 +112,12 @@ namespace monitor {
 	    for (int i = 0 ; i < num_domains ; i++) {
 		virDomainPtr dom = domains [i];
 		auto name = virDomainGetName (dom);
-		logging::info ("Killing VM:", name + 1);
-		virDomainDestroy (dom);
-		virDomainUndefine (dom);
-		virDomainFree (dom);
+		if (std::string (name)[0] == 'v') {
+		    logging::info ("Killing VM:", name + 1);
+		    virDomainDestroy (dom);
+		    virDomainUndefine (dom);
+		    virDomainFree (dom);
+		}
 	    }
 
 	    free (domains);

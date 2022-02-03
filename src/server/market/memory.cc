@@ -104,9 +104,9 @@ namespace server {
 		auto percUsage = v.second-> getMemoryController ().getRelativePercentUsed ();
 		float slope = v.second-> getMemoryController ().getSlope ();
 		unsigned long min = 1048576; // 1GB is the minimal
+		auto nominal = v.second-> getMemoryController ().getMinGuarantee ();
 		unsigned long current = min;
 
-		std::cout << slope << " " << percUsage << std::endl;
 		current = std::max (min, std::min (usage + min, max));
 		if (slope < -0.1f || slope > 0.1f) {
 		    if (percUsage > this-> _config.triggerIncrement) {
@@ -115,8 +115,16 @@ namespace server {
 			current = std::max (min, std::min (max, (unsigned long) ((capp + min) * (1.0 - this-> _config.decreasingSpeed))));
 		    }		
 		} 
-				
-		allocated[v.first] = current;		
+
+		if (current > nominal) {
+		    allocated [v.first] = nominal;
+		    buyers [v.first] = current - nominal;
+		} else {
+		    allocated[v.first] = current;
+		    this-> increaseMoney (v.first, nominal - current);
+		}
+		
+		market -= allocated[v.first];
 	    }
 	    return allocated;
 	}
