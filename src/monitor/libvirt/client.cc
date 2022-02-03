@@ -434,6 +434,15 @@ namespace monitor {
 	void LibvirtClient::mountSwap (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
 	    std::stringstream ss;
 	    ss << vm.user () << "@" << vm.ip ();
+
+	    auto chproc = concurrency::SubProcess ("chmod", {"400", (this-> _keyPath / "key").c_str ()}, vPath);
+	    chproc.start ();
+	    if (chproc.wait () != 0) {
+		std::cout << "ERROR : " << chproc.stderr ().read () << std::endl;
+		std::cout << "OUT : " << chproc.stdout ().read () << std::endl;
+		exit (-1);
+	    }
+	    
 	    for (;;) {
 		auto proc = concurrency::SubProcess ("ssh", {"-o", "StrictHostKeyChecking=no", ss.str (), "-i", (this-> _keyPath / "key").c_str (), "sudo mkswap /dev/vdb ; sudo swapon /dev/vdb"}, vPath);
 		proc.start ();

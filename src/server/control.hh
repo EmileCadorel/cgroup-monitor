@@ -76,14 +76,14 @@ namespace server {
 	 * @params: 
 	 *   - path: the path of the config directory of the controller
 	 */
-	void readCpuMarketConfig (const std::filesystem::path & path = "/var/lib/dio");
+	void readCpuMarketConfig (const std::filesystem::path & path = "/usr/lib/dio");
 
 	/**
 	 * Read the configuration file of the mem market 
 	 * @params: 
 	 *   - path: the path of the config directory of the controller
 	 */
-	void readMemMarketConfig (const std::filesystem::path & path = "/var/lib/dio");
+	void readMemMarketConfig (const std::filesystem::path & path = "/usr/lib/dio");
 	
 	/**
 	 * Main loop control the resource affectations
