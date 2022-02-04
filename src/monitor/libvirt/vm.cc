@@ -25,7 +25,7 @@ namespace monitor {
 	    this-> _memorySLA = inner.getOr <float> ("memorySLA", 0.5);
 	    
 	    std::filesystem::path home = getenv ("HOME");	    
-	    this-> pubKey (inner.getOr <std::string> ("ssh_key", std::string ((home / ".ssh/id_rsa.pub").c_str ())));
+	    this-> _pubKey = inner.getOr <std::string> ("ssh_key", "");
 
 	    this-> _dom = nullptr;
 	}

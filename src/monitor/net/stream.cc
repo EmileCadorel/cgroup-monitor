@@ -69,7 +69,7 @@ namespace monitor {
 
 	std::string TcpStream::receive (unsigned long len) {
 	    if (this-> _sockfd != 0) {
-		auto buf = new char [len];
+		auto buf = new char [len + 1];
 
 		auto r = read (this-> _sockfd, buf, len * sizeof (char));
 		if (r == -1) {

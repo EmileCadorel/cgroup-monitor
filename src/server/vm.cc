@@ -45,7 +45,7 @@ namespace server {
 	    logging::info ("New client with protocol :", prot);
 	    switch (prot) {
 	    case VMProtocol::PROVISION: {
-		this-> treatProvision (client);
+		concurrency::spawn (this, &VMServer::treatProvision, client);
 		break;
 	    }
 	    case VMProtocol::KILL:  {
@@ -66,11 +66,10 @@ namespace server {
 		break;
 	    }
 	    }
-	    client.close ();
 	}
     }
 
-    void VMServer::treatProvision (net::TcpStream & stream) {
+    void VMServer::treatProvision (monitor::concurrency::thread th, net::TcpStream stream) {
 	auto len = stream.receiveInt ();
 	auto file = stream.receive (len);
 	auto cfg = utils::toml::parse (file);
@@ -83,6 +82,7 @@ namespace server {
 		auto ip = vm-> ip ();
 		stream.sendInt (ip.length ());
 		stream.send (ip);
+		stream.close ();
 		return;		    		
 	    }
 	} catch (utils::exception & e) {
@@ -91,6 +91,7 @@ namespace server {
 
 	stream.sendInt (VMProtocol::ERR);
 	stream.sendInt (VMProtocolError::NOT_FOUND);
+	stream.close ();
     }
     
     void VMServer::treatKill (net::TcpStream & stream) {
@@ -100,6 +101,7 @@ namespace server {
 	    if (this-> _libvirt.hasVM (name)) {
 		this-> _libvirt.kill (name);
 		stream.sendInt (VMProtocol::OK);
+		stream.close ();
 		return;
 	    }
 	} catch (...) {
@@ -107,6 +109,7 @@ namespace server {
 
 	stream.sendInt (VMProtocol::ERR);
 	stream.sendInt (VMProtocolError::NOT_FOUND);
+	stream.close ();
     }
 
     void VMServer::treatIp (net::TcpStream & stream) {
@@ -120,6 +123,7 @@ namespace server {
 		    auto ip = vm-> ip ();
 		    stream.sendInt (ip.length ());
 		    stream.send (ip);
+		    stream.close ();
 		    return;
 		}
 	    }
@@ -127,7 +131,8 @@ namespace server {
 	}
 
 	stream.sendInt (VMProtocol::ERR);
-	stream.sendInt (VMProtocolError::NOT_FOUND);	
+	stream.sendInt (VMProtocolError::NOT_FOUND);
+	stream.close ();
     }
 
     void VMServer::treatNat (net::TcpStream & stream) {
@@ -142,6 +147,7 @@ namespace server {
 		    
 		    this-> _libvirt.openNat (*vm, host, guest);
 		    stream.sendInt (VMProtocol::OK);
+		    stream.close ();
 		    return;
 		}
 	    }
@@ -149,7 +155,8 @@ namespace server {
 	}
 
 	stream.sendInt (VMProtocol::ERR);
-	stream.sendInt (VMProtocolError::NOT_FOUND);	
+	stream.sendInt (VMProtocolError::NOT_FOUND);
+	stream.close ();
     }
 
 

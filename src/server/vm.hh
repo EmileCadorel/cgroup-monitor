@@ -58,7 +58,7 @@ namespace server {
 	/**
 	 * Treat a provision request
 	 */
-	void treatProvision (monitor::net::TcpStream & client);
+	void treatProvision (monitor::concurrency::thread t, monitor::net::TcpStream client);
 
 	/**
 	 * Treat a kill request
