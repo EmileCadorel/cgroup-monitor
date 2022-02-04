@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 project(monitor)
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -O3 --std=c++17")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -g --std=c++17")
 
 file(  
   GLOB_RECURSE

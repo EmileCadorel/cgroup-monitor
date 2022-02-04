@@ -1,3 +1,4 @@
 .build/
 vagrant/.vagrant/
 vagrant/Vagrantfile
+*.html
