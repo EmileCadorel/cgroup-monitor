@@ -15,9 +15,10 @@ using json = nlohmann::json;
 
 namespace server {
 
-    VMServer::VMServer (monitor::libvirt::LibvirtClient & client) :
+    VMServer::VMServer (monitor::libvirt::LibvirtClient & client, Controller & control) :
 	_listener (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 0)),
-	_libvirt (client)
+	_libvirt (client),
+	_controller (control)
     {}
     
 
@@ -58,6 +59,10 @@ namespace server {
 	    }
 	    case VMProtocol::NAT: {
 		this-> treatNat (client);
+		break;
+	    }
+	    case VMProtocol::RESET_COUNTERS: {
+		this-> treatResetCounters (client);
 		break;
 	    }
 	    default: {
@@ -159,6 +164,12 @@ namespace server {
 	stream.close ();
     }
 
+    void VMServer::treatResetCounters (net::TcpStream & stream) {
+	this-> _controller.resetMarketCounters ();
+	stream.sendInt (VMProtocol::OK);
+	stream.close ();
+    }
+    
 
     void VMServer::dumpConfig (const std::filesystem::path & path) const {
 	json j;

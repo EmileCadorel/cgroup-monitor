@@ -15,11 +15,11 @@ namespace server {
 	/// The libvirt connection
 	monitor::libvirt::LibvirtClient _libvirt;
 	
-	/// The server provisionning and killing vms
-	VMServer _vms;
-
 	/// The controller of the vms
 	Controller _controller;
+
+	/// The server provisionning and killing vms
+	VMServer _vms;
 	
     public: 
 	

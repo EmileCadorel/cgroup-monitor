@@ -4,8 +4,8 @@
 namespace server {
 
     Daemon::Daemon () :
-	_vms (this-> _libvirt),
-	_controller (this-> _libvirt)
+	_controller (this-> _libvirt),
+	_vms (this-> _libvirt, this-> _controller)
     {}
 
     void Daemon::start () {

@@ -103,18 +103,44 @@ void natVM (const std::string & name, int host, int guest, const std::filesystem
 }
 
 
+void resetCounters (const std::filesystem::path & path = "/var/lib/dio") {
+    std::ifstream f (path / "daemon.json");
+    std::stringstream ss;
+    ss << f.rdbuf ();
+    
+    auto port = json::parse (ss.str ());
+    TcpStream client (net::SockAddrV4 (net::Ipv4Address (127, 0, 0, 1), port["port"]));
+    client.connect ();
+
+    client.sendInt (VMProtocol::RESET_COUNTERS);    
+    auto resp = client.receiveInt ();
+    switch (resp) {
+    case VMProtocol::OK :
+	logging::success ("Counter are reset");
+	break;
+    default:
+	auto err = client.receiveInt ();
+	logging::error ("Failed to reset counters !");
+	break;
+    }
+
+}
+
+
 int main (int argc, char ** argv) {
     CLI::App app {"client"};
 
     std::string kill = "", provision = "", ip = "";
     std::string nat = "";
     int nat_host = 2020, nat_guest = 22;
+    bool flg;
     app.add_option ("--kill", kill, "kill the VM (vm name)");
     app.add_option ("--provision", provision, "provision a VM (toml file)");
     app.add_option ("--ip", ip, "get the ip address of the VM (vm name)");
     app.add_option ("--nat", nat, "enable nat for a given VM");
     app.add_option ("--host", nat_host, "nat in port (host port)");
     app.add_option ("--guest", nat_guest, "nat out port (guest port)");
+    app.add_flag ("--reset-counters", flg, "reset market counters of the monitor");
 	
     try {
 	app.parse(argc, argv);
@@ -127,6 +153,8 @@ int main (int argc, char ** argv) {
 	    //ipVM (ip);
 	} else if (nat != "") {
 	    natVM (nat, nat_host, nat_guest);
+	} else if (flg) {
+	    resetCounters ();
 	} else {
 	    std::cout << "exit." << std::endl;
 	}

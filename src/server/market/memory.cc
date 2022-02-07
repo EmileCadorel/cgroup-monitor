@@ -13,6 +13,10 @@ namespace server {
 	    this-> _config = cfg;
 	}
 
+	void MemoryMarket::reset () {
+	    this-> _accounts.clear ();
+	}
+	
 	void MemoryMarket::run () {
 	    auto & vms = this-> _libvirt.getRunningVMs ();
 	    if (vms.size () == 0) return;

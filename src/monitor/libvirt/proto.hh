@@ -14,6 +14,7 @@ namespace monitor {
 	    ERR, // Error response
 	    IP, // Ask or Send the ip of a VM, (different action for server or client)
 	    NAT, // Ask an new port opening
+	    RESET_COUNTERS, // Reset the markets counters
 	};
 
 	enum VMProtocolError {

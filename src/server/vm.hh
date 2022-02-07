@@ -3,6 +3,7 @@
 #include <monitor/concurrency/_.hh>
 #include <monitor/libvirt/_.hh>
 #include <filesystem>
+#include "control.hh"
 
 namespace server {    
     
@@ -20,13 +21,16 @@ namespace server {
 	/// The libvirt connection
 	monitor::libvirt::LibvirtClient & _libvirt;
 
+	/// The controller of markets
+	Controller & _controller;
+
     public:
 
 	/**
 	 * @params: 
 	 *  - the libvirt client that communicate with libvirt
 	 */
-	VMServer (monitor::libvirt::LibvirtClient & libvirt);
+	VMServer (monitor::libvirt::LibvirtClient & libvirt, Controller & controller);
 	
 	/**
 	 * Start the server thread waiting for new connections
@@ -74,6 +78,11 @@ namespace server {
 	 * Treat a nat request
 	 */
 	void treatNat (monitor::net::TcpStream & client);
+
+	/**
+	 * Treat a reset counter request
+	 */
+	void treatResetCounters (monitor::net::TcpStream & client);
 	
 	/**
 	 * Create the configuration file, in order to access the server from outside process

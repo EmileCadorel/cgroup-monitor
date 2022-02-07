@@ -59,6 +59,11 @@ namespace server {
 	    void run ();
 
 	    /**
+	     * Reset the accounts
+	     */
+	    void reset ();
+	    
+	    /**
 	     * @returns: a json containing the market information of the current tick
 	     */
 	    nlohmann::json dumpLogs () const;

@@ -45,6 +45,12 @@ namespace server {
 
 	/// The mutex used to synchronize the different control loops
 	monitor::concurrency::mutex _mutex;
+
+	/// The mutex used to synchronize cpu market access
+	monitor::concurrency::mutex _cpuMutex;
+
+	/// The mutex used to synchronize mem market access
+	monitor::concurrency::mutex _memMutex;
 	
     public:
 
@@ -59,6 +65,12 @@ namespace server {
 	 */
 	void start ();
 
+	/**
+	 * Reset the market counters
+	 */
+	void resetMarketCounters () ;
+
+	
 	/**
 	 * Wait for the end of the control loop
 	 */

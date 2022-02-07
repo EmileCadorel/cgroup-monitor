@@ -45,11 +45,27 @@ namespace server {
 	monitor::concurrency::kill (this-> _memLoopTh);
     }
 
+    void Controller::resetMarketCounters () {
+	if (this-> _cpuMarketEnabled) {
+	    this-> _cpuMutex.lock ();
+	    this-> _cpuMarket.reset ();
+	    this-> _cpuMutex.unlock ();
+	}
+
+	if (this-> _memMarketEnabled) {
+	    this-> _memMutex.lock ();
+	    this-> _memMarket.reset ();
+	    this-> _memMutex.unlock ();
+	}
+    }
+    
     void Controller::cpuControlLoop (monitor::concurrency::thread th) {
 	for (;;) {
 	    this-> _libvirt.updateCpuControllers ();
 	    if (this-> _cpuMarketEnabled) {
+		this-> _cpuMutex.lock ();
 	    	this-> _cpuMarket.run ();
+		this-> _cpuMutex.unlock ();
 	    }
 
 	    this-> dumpCpuLogs ();	    
@@ -70,7 +86,9 @@ namespace server {
 	for (;;) {
 	    this-> _libvirt.updateMemoryControllers ();
 	    if (this-> _memMarketEnabled) {
+		this-> _memMutex.lock ();
 	    	this-> _memMarket.run ();
+		this-> _memMutex.unlock ();
 	    }
 
 	    this-> dumpMemoryLogs ();

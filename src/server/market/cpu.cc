@@ -23,6 +23,10 @@ namespace server {
 	    this-> _config = cfg;
 	}
 
+	void CpuMarket::reset () {
+	    this-> _accounts.clear ();
+	}
+	
 	nlohmann::json CpuMarket::dumpLogs () const {
 	    nlohmann::json j;
 	    nlohmann::json j2;
