@@ -35,11 +35,21 @@ namespace monitor {
 	    void LibvirtCpuController::enable () {
 		if (this-> _cgroupV2) {
 		    auto path = fs::path ("/sys/fs/cgroup/machine.slice");
-		    this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+		    for (;;) {
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+			if (this-> _cgroupPath.u8string ().length () != 0) break;
+			this-> _t.sleep (0.1);
+		    } 
 		} else {
-		    auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");	
-		    this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
-		}		    		
+		    auto path = fs::path ("/sys/fs/cgroup/cpu/machine.slice");
+		    for (;;) {
+			this-> _cgroupPath = this-> recursiveSearch (path, "v" + this-> _context.id ());
+			if (this-> _cgroupPath.u8string ().length () != 0) break;
+			this-> _t.sleep (0.1);
+		    }
+		}
+
+		std::cout << this-> _cgroupPath.c_str () << std::endl;
 	    }
 	    
 	    void LibvirtCpuController::update () {			
@@ -229,7 +239,8 @@ namespace monitor {
 		    } else {
 			for (const auto & entry : fs::directory_iterator(path)) {
 			    if (fs::is_directory (entry.path ())) {
-				return this-> recursiveSearch (fs::path (entry.path ()), name);
+				auto ret = this-> recursiveSearch (fs::path (entry.path ()), name);
+				if (ret != "") return ret;
 			    }
 			}	    
 		    }

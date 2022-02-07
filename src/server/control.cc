@@ -46,6 +46,7 @@ namespace server {
     }
 
     void Controller::resetMarketCounters () {
+	this-> _mutex.lock ();
 	if (this-> _cpuMarketEnabled) {
 	    this-> _cpuMutex.lock ();
 	    this-> _cpuMarket.reset ();
@@ -57,6 +58,9 @@ namespace server {
 	    this-> _memMarket.reset ();
 	    this-> _memMutex.unlock ();
 	}
+
+	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());
+	this-> _mutex.unlock ();
     }
     
     void Controller::cpuControlLoop (monitor::concurrency::thread th) {
