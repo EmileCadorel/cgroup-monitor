@@ -3,21 +3,24 @@ vms:
      vcpus: 2 
      memory: 4096
      frequency: 800 # The nominal frequency of the VMs
-     instances: 4 # Number of instances to launch of that VM (vm_name1, vm_name2, ...)
+     instances: 1 # Number of instances to launch of that VM (vm_name1, vm_name2, ...)
      disk : 10000
      memorySLA : 0.9
      image : ubuntu-20.04
-     phoronix: 
-       benchmark: compress-7zip
+     test:
+       type: phoronix
+       name: compress-7zip
        start: 0 # start the benchmark at instant 0, (when all the VM are booted, and scripts are installed)
-   - name: vm_big
-     vcpus: 2
-     memory: 4096
-     frequency: 2000
-     disk : 10000
-     memorySLA : 0.9
-     instances: 2
-     image : ubuntu-20.04
-     phoronix: 
-       benchmark: compress-7zip
-       start: 1000 # start the benchmark at instant 1000 seconds
+       nb-run: 1
+   # - name: vm_big
+   #   vcpus: 2
+   #   memory: 4096
+   #   frequency: 2000
+   #   disk : 10000
+   #   memorySLA : 0.9
+   #   instances: 2
+   #   image : ubuntu-20.04
+   #   test:
+   #     type: custom
+   #     name: alloc_script
+   #     start: 1000 # start the benchmark at instant 1000 seconds

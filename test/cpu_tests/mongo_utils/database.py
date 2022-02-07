@@ -25,15 +25,15 @@ class DatabaseClient :
         self._base = self._client["dio-monitor"]
 
     # ****************************************
-    # Insert a line of result in the cpu tests database
+    # Insert a line of result in the tests database
     # 
     # @params:
     #   - scenario: the scenario in yaml format (used to create a uniq identifier, where equivalent scenarios should have the same identifier)
     #   - results: the results of the execution of the scenario, in string format
     #
     #******************************************
-    def insertCPUResult (self, scenario, results) :
-        collection = self._base["cputests"]
+    def insertResult (self, scenario, results) :
+        collection = self._base["tests"]
         
         m = hashlib.md5 ()
         s_scenar = yaml.dump (scenario)
@@ -65,8 +65,8 @@ class DatabaseClient :
     #    - scenario: the scenario to search in yamkl format
     # @returns: the list of results, i.e. list of string, that can be parsed to json
     # ****************************************
-    def getCPUResult (self, scenario) :
-        collection = self._base["cputests"]
+    def getResult (self, scenario) :
+        collection = self._base["tests"]
         m = hashlib.md5 ()
         s_scenar = yaml.dump (scenario)
         m.update (s_scenar.encode ())
@@ -79,114 +79,3 @@ class DatabaseClient :
         return []
 
 
-
-    # ****************************************
-    # Insert a line of result in the memory tests database
-    # 
-    # @params:
-    #   - scenario: the scenario in yaml format (used to create a uniq identifier, where equivalent scenarios should have the same identifier)
-    #   - results: the results of the execution of the scenario, in string format
-    #
-    #******************************************
-    def insertMemResult (self, scenario, results) :
-        collection = self._base["memtests"]
-        
-        m = hashlib.md5 ()
-        s_scenar = yaml.dump (scenario)
-        m.update (s_scenar.encode ())
-        _id = m.hexdigest ()
-
-        old_results = collection.find ({"_id" : _id})
-        values = [results]
-
-        replace = False
-        for oitem in old_results :
-            values = oitem["values"] + values
-            replace = True
-
-        item = {
-            "_id" : _id,
-            "values" : values
-        }
-
-        if (replace) :            
-            collection.replace_one ({"_id" : _id}, item)
-        else :
-            collection.insert_one (item)
-    
-        
-    # ****************************************
-    # Get the list of results associated to a scenario
-    # @params:
-    #    - scenario: the scenario to search in yamkl format
-    # @returns: the list of results, i.e. list of string, that can be parsed to json
-    # ****************************************
-    def getMemResult (self, scenario) :
-        collection = self._base["memtests"]
-        m = hashlib.md5 ()
-        s_scenar = yaml.dump (scenario)
-        m.update (s_scenar.encode ())
-        _id = m.hexdigest ()
-
-        old_results = collection.find ({"_id" : _id})
-        for oitem in old_results : # for loop, but there is 1 or 0 element
-            return oitem["values"]
-
-        return []
-        
-    # ****************************************
-    # Insert a line of result in the hybrid tests database
-    # 
-    # @params:
-    #   - scenario: the scenario in yaml format (used to create a uniq identifier, where equivalent scenarios should have the same identifier)
-    #   - results: the results of the execution of the scenario, in string format
-    #
-    #******************************************
-    def insertHybridResult (self, scenario, results) :
-        collection = self._base["hybridtests"]
-        
-        m = hashlib.md5 ()
-        s_scenar = yaml.dump (scenario)
-        m.update (s_scenar.encode ())
-        _id = m.hexdigest ()
-
-        old_results = collection.find ({"_id" : _id})
-        values = [results]
-
-        replace = False
-        for oitem in old_results :
-            values = oitem["values"] + values
-            replace = True
-
-        item = {
-            "_id" : _id,
-            "values" : values
-        }
-
-        if (replace) :            
-            collection.replace_one ({"_id" : _id}, item)
-        else :
-            collection.insert_one (item)
-    
-        
-    # ****************************************
-    # Get the list of results associated to a scenario
-    # @params:
-    #    - scenario: the scenario to search in yamkl format
-    # @returns: the list of results, i.e. list of string, that can be parsed to json
-    # ****************************************
-    def getHybridResult (self, scenario) :
-        collection = self._base["hybridtests"]
-        m = hashlib.md5 ()
-        s_scenar = yaml.dump (scenario)
-        m.update (s_scenar.encode ())
-        _id = m.hexdigest ()
-
-        old_results = collection.find ({"_id" : _id})
-        for oitem in old_results : # for loop, but there is 1 or 0 element
-            return oitem["values"]
-
-        return []
-
-
-    

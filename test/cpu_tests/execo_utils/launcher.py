@@ -118,6 +118,20 @@ class ExecoClient :
         self.killCmds ([self._monitorCmd])
         logger.info ("Monitor killed on " + str (self._hnodes))
 
+    # ***************************
+    # Download the log files of the monitor
+    # @params:
+    #    - path: where to put the log files (one sub directory is created for each node)
+    # @returns: the list of log files
+    # ***************************
+    def downloadMonitorLogs (self, path = "/tmp/"):
+        logs = []
+        for h in self._hnodes :
+            p = path + "log-" + h.address + ".json"
+            self.downloadFiles ([h], ["/var/log/dio/control-log.json"], p)
+            logs = logs + [(h.address, p)]
+        return logs
+
     # ================================================================================
     # ================================================================================
     # =========================         CLIENT UTILS         =========================
@@ -174,7 +188,7 @@ class ExecoClient :
     def connectVM (self, vmInfo, prvKey = "./keys/key") :
         node = self._vmInfos [vmInfo["name"]]
         port = self.createUnusedPort (node)
-        cmd = self.launchCmd ([node], "dio-client --nat v0 --host {0} --guest 22".format (port))
+        cmd = self.launchCmd ([node], "dio-client --nat " + str (vmInfo["name"]) + " --host {0} --guest 22".format (port))
         cmd.wait ()
 
         return Host (node.address, user="phil", keyfile=prvKey, port=port)
@@ -194,7 +208,14 @@ class ExecoClient :
             self._ports[node] = port + 1
         return port
 
-
+    # **********************************
+    # Kill all the running VMs
+    # **********************************
+    def killAllVMs (self) :
+        for v in self._vmInfos :
+            self.launchAndWaitCmd ([self._vmInfos[v]], "dio-client --kill " + str (v))
+    
+    
     # **********************************
     # Create a file containing the toml configuration of a VM
     # @params:
@@ -319,6 +340,7 @@ class ExecoClient :
     # @params:
     #    - nodes: the list of nodes
     #    - files: the list of files to upload
+    #    - directory: where to put the files
     #    - user: the user on the remote nodes
     # ****************************
     def uploadFiles (self, nodes, files, directory,  user = "root") :
@@ -328,3 +350,20 @@ class ExecoClient :
         cmd_run.run ()
         cmd_run.wait ()
         logger.info ("Done")
+
+
+    # ****************************
+    # Download files located on remote nodes to localhost
+    # @params:
+    #    - nodes: the list of nodes
+    #    - files: the list of files to download
+    #    - directory: where to put the files
+    #    - user: the user on the remote nodes
+    # ****************************
+    def downloadFiles (self, nodes, files, directory, user = "root") :
+        conn_params = {'user': user}
+        cmd_run = Get (nodes, files, directory, connection_params=conn_params)
+        logger.info ("Download files on " + str (nodes) + ":" + str (files))
+        cmd_run.run ()
+        cmd_run.wait ()
+        logger.info ("Done")        

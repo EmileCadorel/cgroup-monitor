@@ -14,9 +14,11 @@ def main () :
     client.configureNodes (withInstall = False, withDownload = False)
     client.startMonitor ()
 
-    scenar = scenario.Scenario ("./scenar1.yml", client)
+    scenar = scenario.Scenario ("./scenar1.yml", client, database.DatabaseClient ())
     scenar.configure ()
-        
+    scenar.run ()
+    scenar.store ()
+    
     client.joinMonitor ()
     
 
