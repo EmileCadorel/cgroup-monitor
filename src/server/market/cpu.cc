@@ -68,7 +68,7 @@ namespace server {
 	    }
 
 	    for (auto it : allocated) {
-		vms.find (it.first)-> second-> getCpuController ().setQuota (it.second, 500); // the period has a strong impact on the memory access (I suppose it makes some synchronization when a thread has no slice left)
+		vms.find (it.first)-> second-> getCpuController ().setQuota (it.second, 100000); // the period has a strong impact on the memory access (I suppose it makes some synchronization when a thread has no slice left)
 	    }
 	}
 
@@ -117,7 +117,7 @@ namespace server {
 	    for (auto & v : vms) {
 		unsigned long usage = v.second-> getCpuController ().getConsumption ();
 		unsigned long max = v.second-> vcpus () * 1000000;
-		unsigned long min = 100000; // 1/4 de vcpus is the lowest 
+		unsigned long min = 500000; // 1/4 de vcpus is the lowest 
 		
 		unsigned long nominal = ((float) v.second-> freq ()) / ((float) this-> _config.cpuFreq) * max;
 		unsigned long capp = v.second-> getCpuController ().getAbsoluteCapping ();

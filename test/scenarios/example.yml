@@ -13,18 +13,18 @@ vms:
        start: 0 # start the benchmark at instant 0, (when all the VM are booted, and scripts are installed)
        end: 100
        params: " 3000"
-   # - name: big
-   #   vcpus: 2
-   #   memory: 4096
-   #   frequency: 2000
-   #   disk : 10000
-   #   memorySLA : 0.9
-   #   instances: 2
-   #   image : ubuntu-20.04
-   #   test:
-   #     type: custom
-   #     name: alloc_script
-   #     start: 1000 # start the benchmark at instant 1000 seconds
+   - name: big
+     vcpus: 2
+     memory: 4096
+     frequency: 2000
+     disk : 10000
+     memorySLA : 0.9
+     instances: 2
+     image : ubuntu-20.04
+     test:
+       type: custom
+       name: alloc_script
+       start: 1000 # start the benchmark at instant 1000 seconds
 cpu-market:
   enable : true
   frequency : 3000

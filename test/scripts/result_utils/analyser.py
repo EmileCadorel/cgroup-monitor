@@ -95,9 +95,10 @@ class ResultAnalyser :
             j = json.loads (line)            
             if ('cpu-control' in j) : 
                 for vm in j["cpu-control"] :
+                    max_cpus = self._vcpus[vm[:-1]] * 1000000
                     self._usageCpuVMs[vm][index] = self._usageCpuVMs[vm][index] + [j["cpu-control"][vm]["host-usage"]]
                     self._relUsageCpuVMs[vm][index] = self._relUsageCpuVMs[vm][index] + [j["cpu-control"][vm]["relative-usage"]]
-                    self._capCpuVMs [vm][index] = self._capCpuVMs[vm][index] + [int (j["cpu-control"][vm]["capping"]) * int (j["cpu-control"][vm]["period"])]                               
+                    self._capCpuVMs [vm][index] = self._capCpuVMs[vm][index] + [(j["cpu-control"][vm]["capping"] / j["cpu-control"][vm]["period"] * 1000000.0) / max_cpus * 100.0]                               
             elif ('mem-control' in j) :
                 for vm in j["mem-control"] :
                     self._hostMemVMs [vm][index] = self._hostMemVMs[vm][index] + [j["mem-control"][vm]["host-usage"]]
@@ -123,7 +124,7 @@ class ResultAnalyser :
                 \\addplot [mark=otimes, color=blue!50] coordinates {
                 """
                 for j in range (len (self._usageCpuVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (min(100.0, self._usageCpuVMs[v][i][j])) + ")"
+                    result = result + "\n(" + str (j) + ", " + str (self._usageCpuVMs[v][i][j]) + ")"
 
                 result = result + """
                 };
@@ -132,7 +133,7 @@ class ResultAnalyser :
                 """
                 
                 for j in range (len (self._capCpuVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (min (self._capCpuVMs[v][i][j] / (int (self._vcpus[v[:-1]]) * 250000.0) * 100.0, 100.0)) + ")"
+                    result = result + "\n(" + str (j) + ", " + str (self._capCpuVMs[v][i][j]) + ")"
 
                 result = result + """
                 };
@@ -213,6 +214,8 @@ class ResultAnalyser :
         \\usepackage{tikz}
         \\usepackage{pgfplots}
         \\usepackage{mathtools, amsmath, relsize}
+        \\usepgfplotslibrary{external} 
+        \\tikzexternalize
         \\begin{document}
         """
 

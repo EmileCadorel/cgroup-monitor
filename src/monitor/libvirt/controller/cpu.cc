@@ -141,8 +141,13 @@ namespace monitor {
 	    
 	    void LibvirtCpuController::setQuota (unsigned long nbMicros, unsigned long period) {
 		this-> _period = period;
-		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;	    
+		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;    
 		this-> _quota = (unsigned long) cap;
+		// if (this-> _quota < 1000) {
+		//     std::cout << this-> _quota << " " << this-> _period << " " << nbMicros << std::endl;
+		//     this-> setQuota (nbMicros, period * 2);
+		//     return;
+		// }
 
 		logging::info ("VM capping", this-> _context.id (), ":", this-> _quota, "*", this-> _period);
 		if (!this-> _cgroupV2) {

@@ -1,0 +1,56 @@
+vms: 
+   - name: small 
+     vcpus: 8
+     memory: 4096
+     frequency: 500 
+     instances: 1 
+     disk : 10000
+     memorySLA : 0.9
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 0 
+       nb-run: 10
+   - name: big
+     vcpus: 8
+     memory: 4096
+     frequency: 2000
+     disk : 10000
+     memorySLA : 0.9
+     instances: 1
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 300 
+       nb-run: 10
+   - name: smallbis 
+     vcpus: 8 
+     memory: 4096
+     frequency: 500 
+     instances: 1 
+     disk : 10000
+     memorySLA : 0.9
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 300 
+       nb-run: 10
+cpu-market:
+  enable : true
+  frequency : 3000
+  trigger-increment : 95.0
+  trigger-decrement : 50.0
+  increment-speed : 100.0
+  decrement-speed : 20.0
+  window-size : 100000
+mem-market :
+  enable : true
+  memory : 16777216
+  trigger-increment : 70.0
+  trigger-decrement : 50.0
+  increment-speed : 50.0
+  decrement-speed : 20.0
+  window-size : 1000
