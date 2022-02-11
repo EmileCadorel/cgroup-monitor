@@ -387,14 +387,17 @@ namespace monitor {
 	    for (;;) { // retreive the mac address of the vm
 		char * xml = virDomainGetXMLDesc (dom, 0);
 		if (xml != nullptr) {
-		    XMLDocument doc;
-		    doc.Parse (xml);
-		    delete xml;
+		    try {
+			XMLDocument doc;
+			doc.Parse (xml);
+			delete xml;
 		    
-		    auto macXML = utils::findInXML (doc.RootElement (), {"devices", "interface", "mac"});
-		    if (macXML != nullptr) {
-			mac = macXML-> Attribute ("address");
-			if (mac != "") break;
+			auto macXML = utils::findInXML (doc.RootElement (), {"devices", "interface", "mac"});
+			if (macXML != nullptr) {
+			    mac = macXML-> Attribute ("address");
+			    if (mac != "") break;
+			}
+		    } catch (...) {
 		    }
 		}
 	    }
@@ -404,16 +407,17 @@ namespace monitor {
 		std::stringstream ss;
 		ss << f.rdbuf ();
 		f.close ();
-		
-		auto j = json::parse (ss.str ());
-		
-		for (auto & it : j) {
-		    if (it["mac-address"] == mac) {
-			ip = it ["ip-address"];
-			break;
+		try {
+		    auto j = json::parse (ss.str ());
+		    
+		    for (auto & it : j) {
+			if (it["mac-address"] == mac) {
+			    ip = it ["ip-address"];
+			    break;
+			}
 		    }
-		}
-		if (ip != "") break;
+		    if (ip != "") break;
+		} catch (...) {}
 	    }
 
 	    vm.mac (mac).ip (ip);
