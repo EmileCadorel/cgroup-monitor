@@ -143,11 +143,8 @@ namespace monitor {
 		this-> _period = period;
 		auto cap = (((float) nbMicros) / 1000000.0f) * (float) this-> _period;    
 		this-> _quota = (unsigned long) cap;
-		// if (this-> _quota < 1000) {
-		//     std::cout << this-> _quota << " " << this-> _period << " " << nbMicros << std::endl;
-		//     this-> setQuota (nbMicros, period * 2);
-		//     return;
-		// }
+
+
 
 		logging::info ("VM capping", this-> _context.id (), ":", this-> _quota, "*", this-> _period);
 		if (!this-> _cgroupV2) {
@@ -161,7 +158,11 @@ namespace monitor {
 		    auto p = this-> _cgroupPath / "cpu.max";
 		    if (fs::exists (p)) {
 			std::ofstream m (p);
-			m << this-> _quota << " " << this-> _period;
+			if (nbMicros >= (unsigned long) (this-> getMaximumConsumption () * 0.85)) {
+			    m << "max " << this-> _period;
+			} else {
+			    m << this-> _quota << " " << this-> _period;
+			}
 			m.close ();
 		    }
 		}
