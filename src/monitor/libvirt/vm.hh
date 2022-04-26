@@ -4,8 +4,7 @@
 #include <string>
 #include <libvirt/libvirt.h>
 #include <monitor/utils/config.hh>
-#include <monitor/libvirt/controller/cpu.hh>
-#include <monitor/libvirt/controller/memory.hh>
+#include <monitor/libvirt/controller/vcpu.hh>
 
 namespace monitor {
 
@@ -56,17 +55,24 @@ namespace monitor {
 	    /// The mac address of the VM
 	    std::string _mac;
 
-	    /// The cpu controller of the VM
-	    control::LibvirtCpuController _cpuController;
+	    /// The list of vcpu of the VM
+	    std::vector <control::LibvirtVCPUController> _vcpuControllers;
 
-	    /// The memory controller of the VM
-	    control::LibvirtMemoryController _memoryController;
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================            MARKET            =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+	    
+	    /// The money of the VM
+	    unsigned long _money;
 	    
 	public:
 
 	    friend LibvirtClient;
-	    friend control::LibvirtCpuController;
-	    friend control::LibvirtMemoryController;
+	    friend control::LibvirtVCPUController;
 
 	    /**
 	     * @params: 
@@ -226,25 +232,28 @@ namespace monitor {
 	     * ================================================================================
 	     */
 	    
-	    /**
-	     * @returns: the cpu controller of the VM
-	     */
-	    control::LibvirtCpuController & getCpuController () ;
+	    const std::vector <control::LibvirtVCPUController> & getVCPUControllers () const;
+
+	    std::vector <control::LibvirtVCPUController> & getVCPUControllers ();
+
 
 	    /**
-	     * @returns: the cpu controller of the VM
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================            MARKET            =========================
+	     * ================================================================================
+	     * ================================================================================
 	     */
-	    const control::LibvirtCpuController & getCpuController () const;
-	    
-	    /**
-	     * @returns: the memory controller of the VM
-	     */
-	    control::LibvirtMemoryController & getMemoryController ();
 
 	    /**
-	     * @returns: the memory controller of the VM
+	     * @returns: the money of the VM	      
 	     */
-	    const control::LibvirtMemoryController & getMemoryController () const;	    
+	    unsigned long & money ();
+
+	    /**
+	     * Apply the vcpu allocation computed by a market
+	     */
+	    void applyMarketAllocation (unsigned long period = 100000);
 	    
 	    /**
 	     * ================================================================================

@@ -10,9 +10,7 @@ namespace monitor {
 
     namespace libvirt {
 
-	LibvirtVM::LibvirtVM (const utils::config::dict & cfg) :
-	    _cpuController (*this),
-	    _memoryController (*this)
+	LibvirtVM::LibvirtVM (const utils::config::dict & cfg)
 	{
 	    auto inner = cfg.get <utils::config::dict> ("vm");
 	    this-> _id = inner.get<std::string> ("name");
@@ -28,6 +26,11 @@ namespace monitor {
 	    this-> _pubKey = inner.getOr <std::string> ("ssh_key", "");
 
 	    this-> _dom = nullptr;
+	    this-> _money = 0;
+
+	    for (int i = 0 ; i < this-> _vcpus ; i++) {
+		this-> _vcpuControllers.push_back (control::LibvirtVCPUController (i, *this));
+	    }
 	}
 	    
 	
@@ -37,14 +40,17 @@ namespace monitor {
 	    _disk (10000),
 	    _vcpus (1),
 	    _mem (2048),
-	    _memorySLA (0.5),
-	    _cpuController (*this),
-	    _memoryController (*this)
+	    _memorySLA (0.5)
 	{
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> pubKey (home / ".ssh/id_rsa.pub");
 
 	    this-> _dom = nullptr;
+	    this-> _money = 0;
+	    
+	    for (int i = 0 ; i < this-> _vcpus ; i++) {
+		this-> _vcpuControllers.push_back (control::LibvirtVCPUController (i, *this));
+	    }
 	}
 	
 	const std::string & LibvirtVM::id () const {
@@ -155,21 +161,32 @@ namespace monitor {
 	 * ================================================================================
 	 */
 
-	control::LibvirtCpuController & LibvirtVM::getCpuController () {
-	    return this-> _cpuController;
+	const std::vector <control::LibvirtVCPUController> & LibvirtVM::getVCPUControllers () const {
+	    return this-> _vcpuControllers;
 	}
 
-	const control::LibvirtCpuController & LibvirtVM::getCpuController () const {
-	    return this-> _cpuController;
+	std::vector <control::LibvirtVCPUController> & LibvirtVM::getVCPUControllers () {
+	    return this-> _vcpuControllers;
 	}
 
-	control::LibvirtMemoryController & LibvirtVM::getMemoryController () {
-	    return this-> _memoryController;
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================            MARKET            =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+	unsigned long & LibvirtVM::money () {
+	    return this-> _money;
 	}
 
-	const control::LibvirtMemoryController & LibvirtVM::getMemoryController () const {
-	    return this-> _memoryController;
-	}	
+	void LibvirtVM::applyMarketAllocation (unsigned long period) {
+	    // logging::info ("VM Money :", this-> _id, this-> _money);
+	    for (auto & c : this-> _vcpuControllers) {
+		c.setQuota (c.allocated (), period);
+	    }
+	}
 	
 	/**
 	 * ================================================================================

@@ -28,13 +28,18 @@ namespace monitor {
 	    concurrency::mutex _mutex;
 
 	    /// The list of running VMs
-	    std::map <std::string, LibvirtVM*> _running;
+	    std::vector <LibvirtVM*> _running;
 
 	    /// The key used to connect to VM 
 	    std::string _pubKey;
 
 	    /// The directory containing monitor keys
 	    std::filesystem::path _keyPath;
+
+	    std::vector <unsigned int> _cpuFreq;
+
+	    std::vector <std::string> _cpuPath;
+
 	    
 	public:
 	    
@@ -80,15 +85,14 @@ namespace monitor {
 	     */
 
 	    /**
-	     * Update the cpu controllers of the running VMs
+	     * Update the vcpu controllers of the vms
 	     */
-	    void updateCpuControllers ();
+	    void updateVCPUControllers ();
 
 	    /**
-	     * Update the memory controllers of the running VMs
+	     * Compute the means of the last ticks for before the market execution (and log dumping)
 	     */
-	    void updateMemoryControllers ();
-	    
+	    void updateVCPUBeforeMarket ();
 	    
 	    /**
 	     * ================================================================================
@@ -132,7 +136,7 @@ namespace monitor {
 	    /**
 	     * @returns: the running VMs on the host
 	     */
-	    std::map <std::string, LibvirtVM*> & getRunningVMs ();
+	    std::vector <LibvirtVM*> & getRunningVMs ();
 
 	    /**
 	     * Provision a new VM
@@ -153,6 +157,7 @@ namespace monitor {
 	     *   - path: the location of the installed VM
 	     */
 	    void kill (const std::string & vm, const std::filesystem::path & path = "/tmp/");
+
 	    
 	    /**
 	     * ================================================================================
@@ -170,6 +175,17 @@ namespace monitor {
 	     *  - guest: the output port (guest port)
 	     */
 	    LibvirtVM & openNat (LibvirtVM & vm, int host, int guest);
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================          FREQUENCY           =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    
+	    const std::vector <unsigned int> & getLastCPUFrequency () ;
 	    
 	    /**
 	     * ================================================================================
@@ -307,6 +323,13 @@ namespace monitor {
 	     *   - path: the path of the vm directory
 	     */
 	    void deleteDirAndVMFile (const LibvirtVM & vm, const std::filesystem::path & path) const;	    
+
+	    /**
+	     * Remove a VM from the list of running VM
+	     * @params:
+	     *   - name: the id of the VM
+	     */
+	    void removeVM (const std::string & name);
 	    
 	    /**
 	     * ================================================================================
@@ -326,8 +349,6 @@ namespace monitor {
 	     */
 	    virDomainPtr retreiveDomain (const std::string & name);
 
-
-
 	    /**
 	     * ================================================================================
 	     * ================================================================================
@@ -336,11 +357,24 @@ namespace monitor {
 	     * ================================================================================
 	     */
 
-
 	    /**
 	     * Enable nat routing
 	     */
 	    void enableNatRouting () const;
+
+	    /**
+	     * ================================================================================
+	     * ================================================================================
+	     * =========================           CPU FREQ           =========================
+	     * ================================================================================
+	     * ================================================================================
+	     */
+
+	    /**
+	     * Read the current frequency of the cpus
+	     */
+	    const std::vector <unsigned int> & readCPUFrequency () ;
+	    
 	    
 	};
     }

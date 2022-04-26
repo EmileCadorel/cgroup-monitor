@@ -13,7 +13,8 @@
 #include <ifaddrs.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <sys/sysinfo.h>
+#include <monitor/utils/log.hh>
 
 using namespace monitor::utils;
 using namespace tinyxml2;
@@ -86,15 +87,21 @@ namespace monitor {
 	 * ================================================================================
 	 */
 
-	void LibvirtClient::updateCpuControllers () {
+	void LibvirtClient::updateVCPUControllers () {
+	    auto speed = this-> readCPUFrequency ();
+	    
 	    for (auto & vm : this-> _running) {
-		vm.second-> getCpuController ().update ();
+		for (auto & vt : vm-> getVCPUControllers ()) {
+		    vt.update (speed);
+		}
 	    }
 	}
 
-	void LibvirtClient::updateMemoryControllers () {
+	void LibvirtClient::updateVCPUBeforeMarket () {
 	    for (auto & vm : this-> _running) {
-		vm.second-> getMemoryController ().update ();
+		for (auto & vt : vm-> getVCPUControllers ()) {
+		    vt.updateBeforeMarket ();
+		}
 	    }
 	}
 	
@@ -158,29 +165,51 @@ namespace monitor {
 
 	bool LibvirtClient::hasVM (const std::string & name) {
 	    this-> _mutex.lock ();
-	    auto it = this-> _running.find (name);
+	    bool found = false;
+	    for (auto & vm : this-> _running) {
+		if (vm-> id () == name) {
+		    found = true;
+		    break;
+		}
+	    }
 	    this-> _mutex.unlock ();
 	    
-	    return it != this-> _running.end ();
+	    return found;
 	}
 
 	LibvirtVM* LibvirtClient::getVM (const std::string & name) {
 	    this-> _mutex.lock ();
-	    auto it = this-> _running.find (name);
+	    LibvirtVM * ret = nullptr;
+	    for (auto & vm : this-> _running) {
+		if (vm-> id () == name) {
+		    ret = vm;
+		    break;
+		}
+	    }
 	    this-> _mutex.unlock ();
 	    
-	    if (it != this-> _running.end ()) {
-		return it-> second;		
-	    }
+	    return ret;
+	}
 
-	    return nullptr;
+	void LibvirtClient::removeVM (const std::string & name) {
+	    std::vector <LibvirtVM*> res;
+	    this-> _mutex.lock ();
+	    LibvirtVM * ret = nullptr;
+	    for (auto & vm : this-> _running) {
+		if (vm-> id () != name) {
+		    res.push_back (vm);
+		    break;
+		}
+	    }
+	    this-> _mutex.unlock ();
+	    this-> _running = std::move (res);	    
 	}
 	
 
-	std::map <std::string, LibvirtVM*> & LibvirtClient::getRunningVMs () {
+	std::vector <LibvirtVM*> & LibvirtClient::getRunningVMs () {
 	    return this-> _running;
 	}
-	
+
        	
 	const LibvirtVM * LibvirtClient::provision (const utils::config::dict & cfg, const std::filesystem::path & path) {
 	    auto vm = new LibvirtVM (cfg);
@@ -208,14 +237,14 @@ namespace monitor {
 	    
 		vm-> _dom = this-> retreiveDomain (vm-> id ());
 	    
-		vm-> getCpuController ().enable ();
-		vm-> getMemoryController ().enable ();
-	    
-		this-> _running.emplace (vm-> id (), vm);
+		for (auto &it : vm-> getVCPUControllers ()) {
+		    it.enable ();
+		}
+			    
+		this-> _running.push_back (vm);
 
 		return vm;
 	    } catch (LibvirtError err) {
-		this-> _running.erase (vm-> id ());
 		delete vm;
 		throw err;
 	    }
@@ -223,20 +252,20 @@ namespace monitor {
 
 
 	void LibvirtClient::kill (const std::string & vm, const std::filesystem::path & path) {
-	    auto v = this-> _running.find (vm);
-	    if (v != this-> _running.end ()) {
-		auto vPath = path / ("v" + v-> second-> id ());
+	    auto v = this-> getVM (vm);
+	    if (v != nullptr) {
+		auto vPath = path / ("v" + v-> id ());
 		
 		// Kill the domain
-		this-> killDomain (*v-> second);
+		this-> killDomain (*v);
 
 		// Destroy the vm file, and associated disks
-		this-> deleteDirAndVMFile (*v-> second, vPath);
+		this-> deleteDirAndVMFile (*v, vPath);
 
-		logging::success ("VM", v-> second-> id (), "is killed");
-		
-		this-> _running.erase (v-> second-> id ());
-		delete v-> second;		
+		logging::success ("VM", v-> id (), "is killed");
+
+		this-> removeVM (vm);
+		delete v;		
 	    }
 	}
 	
@@ -546,6 +575,42 @@ namespace monitor {
 	    freeifaddrs(addresses);
 	}
 
+	/**
+	 * ================================================================================
+	 * ================================================================================
+	 * =========================        CPU FREQUENCY         =========================
+	 * ================================================================================
+	 * ================================================================================
+	 */
+
+
+	const std::vector <unsigned int> & LibvirtClient::readCPUFrequency () {
+	    if (this-> _cpuPath.size () != get_nprocs ()) {
+		for (auto i = 0 ; i < get_nprocs (); i++) {
+		    std::stringstream path;
+		    path << "/sys/devices/system/cpu/cpu" << i << "/cpufreq/scaling_cur_freq";
+		    this-> _cpuPath.push_back (path.str ());
+		    this-> _cpuFreq.push_back (0);
+		}
+	    }
+	    
+	    for (auto i = 0 ; i < this-> _cpuFreq.size (); i++) {
+		std::ifstream f (this-> _cpuPath[i]);
+		std::stringstream buffer;
+		std::string res;
+		buffer << f.rdbuf();
+		unsigned int p;
+		buffer >> this-> _cpuFreq[i];
+		f.close ();
+	    }
+
+	    return this-> _cpuFreq;
+	}
+
+	const std::vector <unsigned int> & LibvirtClient::getLastCPUFrequency () {
+	    return this-> _cpuFreq;
+	}
+	
 	
 	/**
 	 * ================================================================================

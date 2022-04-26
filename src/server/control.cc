@@ -17,13 +17,10 @@ namespace server {
 
     Controller::Controller (monitor::libvirt::LibvirtClient & client) :
 	_libvirt (client),
-	_cpuMarket (client),
-	_cpuMarketEnabled (false),
-	_memMarket (client),
-	_memMarketEnabled (false)
+	_vcpuMarketEnabled (false),
+	_vcpuMarket (client)
     {
 	this-> readCpuMarketConfig ();
-	this-> readMemMarketConfig ();
 
     	fs::create_directories ("/var/log/dio");
 	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());
@@ -32,31 +29,22 @@ namespace server {
 
     void Controller::start () {
 	this-> _cpuLoopTh = monitor::concurrency::spawn (this, &Controller::cpuControlLoop);
-	this-> _memLoopTh = monitor::concurrency::spawn (this, &Controller::memoryControlLoop);
     }
 
     void Controller::join () {
 	monitor::concurrency::join (this-> _cpuLoopTh);
-	monitor::concurrency::join (this-> _memLoopTh);
     }
 
     void Controller::kill () {
 	monitor::concurrency::kill (this-> _cpuLoopTh);
-	monitor::concurrency::kill (this-> _memLoopTh);
     }
 
     void Controller::resetMarketCounters () {
 	this-> _mutex.lock ();
-	if (this-> _cpuMarketEnabled) {
-	    this-> _cpuMutex.lock ();
-	    this-> _cpuMarket.reset ();
-	    this-> _cpuMutex.unlock ();
-	}
-
-	if (this-> _memMarketEnabled) {
-	    this-> _memMutex.lock ();
-	    this-> _memMarket.reset ();
-	    this-> _memMutex.unlock ();
+	if (this-> _vcpuMarketEnabled) {
+	    this-> _vcpuMutex.lock ();
+	    this-> _vcpuMarket.reset ();
+	    this-> _vcpuMutex.unlock ();
 	}
 
 	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());
@@ -64,49 +52,35 @@ namespace server {
     }
     
     void Controller::cpuControlLoop (monitor::concurrency::thread th) {
+	int i = 0; 
 	for (;;) {
-	    this-> _libvirt.updateCpuControllers ();
-	    if (this-> _cpuMarketEnabled) {
-		this-> _cpuMutex.lock ();
-	    	this-> _cpuMarket.run ();
-		this-> _cpuMutex.unlock ();
-	    }
-
-	    this-> dumpCpuLogs ();	    
+	    this-> _libvirt.updateVCPUControllers ();
+	    if (i == 1) {
+		this-> _libvirt.updateVCPUBeforeMarket ();
+		if (this-> _vcpuMarketEnabled) {
+		    this-> _vcpuMutex.lock ();
+		    this-> _vcpuMarket.run ();
+		    this-> _vcpuMutex.unlock ();
+		}
+		
+		this-> dumpCpuLogs ();
+		i = 0;
+	    }	    
 	    this-> waitCpuFrame ();
+	    i += 1;
 	}
     }
     
     void Controller::waitCpuFrame () {
 	auto s = std::chrono::system_clock::now ();
-	auto r = 1.0f - this-> _cpuT.time_since_start ();
-	this-> _cpuT.sleep (r);
+	auto r = 1.f - this-> _cpuT.time_since_start ();
+	if (r > 0.f) {
+	    this-> _cpuT.sleep (r);
+	}
 	auto e = std::chrono::system_clock::now ();
 	this-> _cpuT.reset (e, (e - s));
     }    
 
-
-    void Controller::memoryControlLoop (monitor::concurrency::thread) {
-	for (;;) {
-	    this-> _libvirt.updateMemoryControllers ();
-	    if (this-> _memMarketEnabled) {
-		this-> _memMutex.lock ();
-	    	this-> _memMarket.run ();
-		this-> _memMutex.unlock ();
-	    }
-
-	    this-> dumpMemoryLogs ();
-	    this-> waitMemoryFrame ();
-	}
-    }
-
-    void Controller::waitMemoryFrame () {
-	auto s = std::chrono::system_clock::now ();
-	auto r = 1.0f - this-> _memT.time_since_start ();
-	this-> _memT.sleep (r);
-	auto e = std::chrono::system_clock::now ();
-	this-> _memT.reset (e, (e - s));
-    }    
     
     void Controller::readCpuMarketConfig (const fs::path & path) {
 	std::ifstream f (path / "cpu-market.json");	
@@ -117,11 +91,11 @@ namespace server {
 	    auto j = json::parse (ss.str ());
 
 	    if (j.contains ("enable") && j["enable"].is_boolean ()) {
-		this-> _cpuMarketEnabled = j["enable"].get<bool> ();
+		this-> _vcpuMarketEnabled = j["enable"].get<bool> ();
 	    }
 
-	    if (this-> _cpuMarketEnabled) {
-		auto marketConfig = market::CpuMarketConfig {
+	    if (this-> _vcpuMarketEnabled) {
+		auto marketConfig = market::VCPUMarketConfig {
 		    j["frequency"].get<int> (),
 		    j["trigger-increment"].get<float> () / 100.0f,
 		    j["trigger-decrement"].get<float> () / 100.0f,
@@ -129,67 +103,47 @@ namespace server {
 		    j["decrement-speed"].get<float> () / 100.0f,
 		    j["window-size"].get<unsigned long> ()
 		};
-		this-> _cpuMarket.setConfig (marketConfig);
+		this-> _vcpuMarket.setConfig (marketConfig);
 	    }	    	    
 	} else {
-	    this-> _cpuMarketEnabled = false;
+	    this-> _vcpuMarketEnabled = false;
 	}
 
-	if (this-> _cpuMarketEnabled) {
+	if (this-> _vcpuMarketEnabled) {
 	    logging::info ("CPU Market enabled");
 	} else {
 	    logging::warn ("CPU Market disabled");
 	}
     }
 
-    void Controller::readMemMarketConfig (const fs::path & path) {
-	std::ifstream f (path / "mem-market.json");	
-	if (f.good ()) {
-	    std::stringstream ss;
-	    ss << f.rdbuf ();
-	    f.close ();
-	    auto j = json::parse (ss.str ());
 
-	    if (j.contains ("enable") && j["enable"].is_boolean ()) {
-		this-> _memMarketEnabled = j["enable"].get<bool> ();
-	    }
-
-	    if (this-> _memMarketEnabled) {
-		auto marketConfig = market::MemoryMarketConfig {
-		    j["memory"].get<unsigned long> (),
-		    j["trigger-increment"].get<float> () / 100.0f,
-		    j["trigger-decrement"].get<float> () / 100.0f,
-		    j["increment-speed"].get<float> () / 100.0f,
-		    j["decrement-speed"].get<float> () / 100.0f,
-		    j["window-size"].get<unsigned long> ()
-		};
-		this-> _memMarket.setConfig (marketConfig);
-	    }	    	    
-	} else {
-	    this-> _memMarketEnabled = false;
-	}
-
-	if (this-> _memMarketEnabled) {
-	    logging::info ("MEM Market enabled");
-	} else {
-	    logging::warn ("MEM Market disabled");
-	}
-    }
-
-    
     void Controller::dumpCpuLogs () {
 	json j;
 	j["time"] = logging::get_time ();
 	j["cpu-duration"] = this-> _cpuT.time_since_start ();
+	json j2, money, freq;
+	int i = 0;	    
+	for (auto j : this-> _libvirt.getLastCPUFrequency ()) {
+	    freq[i] = j;
+	    i += 1;
+	}
+
 	if (this-> _libvirt.getRunningVMs ().size () != 0) {
-	    j["cpu-market"] = this-> _cpuMarket.dumpLogs ();
-	    json j2;
 	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
-		j2 [v.first] = v.second-> getCpuController ().dumpLogs ();
+		i = 0;
+		json all;
+		for (auto & vt : v-> getVCPUControllers ()) {
+		    all [i] = vt.dumpLogs ();
+		    i += 1;
+		}
+		j2 [v-> id ()] = all;
+		money[v-> id()] = v-> money ();
 	    }
-	    
 	    j["cpu-control"] = j2;
+	    j["accounts"] = money;
 	}
+	
+	j["freq"] = freq;	
 
 	this-> _mutex.lock ();
 	std::ofstream f (this-> _logPath, std::ios_base::app);
@@ -197,27 +151,6 @@ namespace server {
 	f.close ();
 	this-> _mutex.unlock ();
     }
-
-
-    void Controller::dumpMemoryLogs () {
-	json j;
-	j["time"] = logging::get_time ();
-	j["mem-duration"] = this-> _memT.time_since_start ();
-	if (this-> _libvirt.getRunningVMs ().size () != 0) {
-	    j["memory-market"] = this-> _memMarket.dumpLogs ();
-	    json j2;
-	    for (auto & v : this-> _libvirt.getRunningVMs ()) {
-		j2 [v.first] = v.second-> getMemoryController ().dumpLogs ();
-	    }
-	    
-	    j["mem-control"] = j2;
-	}
-
-	this-> _mutex.lock ();
-	std::ofstream f (this-> _logPath, std::ios_base::app);
-	f << j.dump () << std::endl;
-	f.close ();
-	this-> _mutex.unlock ();
-    }
+   
 
 }
