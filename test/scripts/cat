@@ -1,0 +1,1 @@
+max 100000 /sys/fs/cgroup/machine.slice/machine-qemu\x2d1\x2dvsmall0.scope/cpu.max

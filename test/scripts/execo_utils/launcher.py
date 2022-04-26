@@ -28,6 +28,7 @@ class ExecoClient :
         self._monitorCmd = None    
         self._ports = {}
         self._vmInfos = {}
+        self._vmDef = {}
 
 
     # *****************************
@@ -38,7 +39,7 @@ class ExecoClient :
     #    - sites: the list of grid5000 sites in which to look for a running job
     # *****************************
     @classmethod
-    def fromG5K (cls, sites = ["nantes", "lille"]) : 
+    def fromG5K (cls, sites = ["nantes", "lille"], forceRedeploy = False) : 
         jobs = get_current_oar_jobs (["nantes", "lille"])
         if (len (jobs) == 0) :
             sys.exit ("No jobs on sites : ", sites)
@@ -50,7 +51,7 @@ class ExecoClient :
                 nodes = sorted ([job_nodes for job in running_jobs for job_nodes in get_oar_job_nodes (*job)], key=lambda x: x.address)
                 logger.info ("Will deploy on : " + str (nodes))
 
-                deployed, undeployed = deploy (Deployment (nodes, env_name="ubuntu2004-x64-min"), check_deployed_command=started)
+                deployed, undeployed = deploy (Deployment (nodes, env_name="ubuntu2004-x64-min"), check_deployed_command=(not forceRedeploy))
                 return cls (nodes)
             else :
                 time.sleep (1)
@@ -79,8 +80,17 @@ class ExecoClient :
             self.launchAndWaitCmd (self._hnodes, "sudo apt-get update")
             self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y stress cgroup-tools apt-transport-https ca-certificates curl gnupg lsb-release")
             self.launchAndWaitCmd (self._hnodes, "sudo apt-get update")
-            self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst virt-manager nfs-common libguestfs-tools default-jre ruby dnsmasq-utils php-cli php-xml")
-            self.uploadFiles (self._hnodes, ["./libdio.deb"], "./")
+            self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst virt-manager nfs-common libguestfs-tools default-jre ruby dnsmasq-utils php-cli php-xml gnupg")
+            self.launchAndWaitCmd (self._hnodes, "wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -")
+            self.launchAndWaitCmd (self._hnodes, 'echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list')
+
+            self.launchAndWaitCmd (self._hnodes, "sudo apt-get update")
+            
+            self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y python3-pip mongodb-org")
+            self.launchAndWaitCmd (self._hnodes, "sudo systemctl start mongod")
+            self.launchAndWaitCmd (self._hnodes, "pip3 install execo")
+            self.launchAndWaitCmd (self._hnodes, "pip3 install pymongo")
+            self.uploadFiles (self._hnodes, ["../utils/libdio.deb"], "./")
             self.launchAndWaitCmd (self._hnodes, "dpkg -i libdio.deb")
 
         if (withDownload) :
@@ -185,7 +195,7 @@ class ExecoClient :
         if (loadBalancer == None):
             node = self._hnodes[0]
         else :
-            node = loadBalancer.select (self._hnodes, self._runningVMS)
+            node = loadBalancer.select (self._hnodes, self._vmInfos, self._vmDef, vmInfo)
 
         pubKeyContent = ""
         with open (pubKey, "r") as fp:
@@ -198,6 +208,7 @@ class ExecoClient :
         self.uploadFiles ([node], ["/tmp/{0}_config.toml".format (vmInfo["name"])], "./") 
         cmd = self.launchCmd ([node], "dio-client --provision ./{0}_config.toml".format (vmInfo["name"]))
         self._vmInfos[vmInfo["name"]] = node
+        self._vmDef [vmInfo["name"]] = vmInfo
 
         return cmd
 
@@ -216,7 +227,22 @@ class ExecoClient :
 
         return Host (node.address, user="phil", keyfile=prvKey, port=port)
 
+    # **********************************
+    # Open a NAT port to access the VM from the external network
+    # @params:
+    #   - vmName: the name of the vm to access by NAT
+    #   - port: the port redirection
+    # @returns: the NAT port
+    # **********************************
+    def openVMPort (self, vmName, port, outPort = None) : 
+        node = self._vmInfos[vmName]
+        if (outPort == None) : 
+            outPort = self.createUnusedPort (node)
 
+        cmd = self.launchCmd ([node], "dio-client --nat " + str (vmName) + " --host {0} --guest {1}".format (outPort, port))
+        cmd.wait ()
+        return outPort
+    
     # **********************************
     # Get an unused port on the node node
     # @params:
@@ -257,7 +283,15 @@ class ExecoClient :
         s = s + "frequency = {0}\n".format (vmInfo ["frequency"])
         s = s + "memorySLA = {0}\n".format (vmInfo["memorySLA"])
         return s
-        
+
+
+    # **********************************
+    # Access a node that will be used to create workload on the VMs
+    # This node is the last on the node list, and should be empty (if there is multiple node in the cluster, and depending on the load balancer)
+    # @returns: a node
+    # **********************************
+    def getLoadNode (self): 
+        return self._hnodes[-1]
         
     # ================================================================================
     # ================================================================================
@@ -343,18 +377,10 @@ class ExecoClient :
     #   - images: the list of images to download (wget)
     #   - user: the user that will download the images
     # ************************************            
-    def downloadImages (self, nodes, images, user = "root") :
-        conn_params = {'user': user}
-        cmd_run = Remote ("mkdir -p .qcow2", nodes, conn_params)
-        cmd_run.start ()
-        cmd_run.wait ()
-    
+    def downloadImages (self, nodes, images, user = "root") :    
         for i in images :
             cmd = "wget " + images [i] + " -O .qcow2/" + i + ".qcow2"
-            cmd_run = Remote (cmd, nodes, conn_params)
-            logger.info ("Launch " + cmd + " on " + str (nodes))
-            cmd_run.start ()
-            cmd_run.wait ()
+            self.launchAndWaitCmd (nodes, cmd)
 
         logger.info ("Done")
 

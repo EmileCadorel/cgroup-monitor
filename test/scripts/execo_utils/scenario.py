@@ -38,14 +38,14 @@ class Scenario :
     # Start the VMs involved in the scenario
     # Wait until all the VMs are correctly configured
     # ***********************************************
-    def configure (self):
+    def configure (self, loadBalancer = None):
         self._client.uploadMonitorConfiguration (self._cpuconfig, self._memconfig)
         self._client.startMonitor ()
         time.sleep (2)
         
         cmds = {}
         for v in self._toInstall :
-            cmds[v[0]["name"]] = self._client.startVM (v[0])
+            cmds[v[0]["name"]] = self._client.startVM (v[0], loadBalancer = loadBalancer)
 
         for v in self._toInstall :
             cmds [v[0]["name"]].wait ()
@@ -73,6 +73,13 @@ class Scenario :
                 part2 = part2 + [self._vms[v]] # Phoronix needs a second step
             elif (test ["type"] == "custom") :
                 cmds = cmds + [self._installCustomTest (vm, test)]
+            elif (test ["type"] == "stress") :
+                cmds = cmds + [self._installStressTest (vm)]
+            elif (test ["type"] == "deathstar") :
+                (cmd, port) = self._installDeathStar (vm, test)
+                test["port"] = port
+                cmds = cmds + [cmd]
+                self._vms[v] = (self._vms[v][0], test)
             else :
                 logger.error ("Unknown test type : " + str (test["type"]) + " for VM " + str (v))
 
@@ -129,6 +136,26 @@ class Scenario :
         return cmd
 
     # ***********************************************
+    # Install a death star benchmark test
+    # @warning: does not wait the end of the install command
+    # @params:
+    #     - vm: the vm
+    #     - test: the test to install
+    # @returns:
+    #    - [0]: the install command to wait
+    #    - [1]: the port on which the server will be opened and accessible
+    # ***********************************************
+    def _installDeathStar (self, vm, test) :
+        # Upload the install script inside the VM
+        self._client.uploadFiles ([vm], ["../utils/deathstar/{0}/install.sh".format (test["name"])], ".", user="phil")
+        self._client.launchAndWaitCmd ([vm], "chmod +x ./install.sh", user="phil")
+        port = self._client.openVMPort (self._vmNames [vm], 5000)
+        
+        # Launch the script on the VM
+        cmd = self._client.launchCmd ([vm], "sudo ./install.sh", user="phil")
+        return (cmd, port)
+
+    # ***********************************************
     # Install the phoronix test "test" on the VM "vm"
     # @assume: phoronix is installed and configured on the VM
     # @warning: does not wait the end of the installation command
@@ -168,18 +195,28 @@ class Scenario :
         return self._client.launchCmd ([vm], rootPath + "/install.sh", user = "phil")    
 
     # ***********************************************
+    # Install the stress test in the VM
+    # @warning: does not wait the end of the install command
+    # @params:
+    #    - vm: the VM Host
+    # @returns: the install command to wait
+    # ***********************************************
+    def _installStressTest (self, vm):
+        return self._client.launchCmd ([vm], "sudo apt update ; sudo apt install stress")
+    
+    # ***********************************************
     # Start the scenario (launch the benchmark at the correct moment)
     # Wait until the scenario is finished
     # Retreive the log files of the monitors
     # ***********************************************
     def run (self): 
         instants = list (self._toRun.keys ())
-        sorted (instants)
+        instants = sorted (instants)
 
         time.sleep (30)
         logger.info ("Starting benchmark")
         self._client.resetMonitorCounters ()
-        
+        print (instants)
         for i in range (len (instants)) :
             logger.info ("Running test at instant : " + str (instants[i]))
             self._runTests (instants [i], self._toRun [instants [i]])
@@ -223,10 +260,14 @@ class Scenario :
         if (test["type"] == "phoronix") :
             nbRun = test["nb-run"]
             self._running [vm] = self._client.launchCmd ([vm], "export FORCE_TIMES_TO_RUN=" + str (nbRun) + ' ; phoronix-test-suite batch-run ' + test["name"], user="phil")
+        elif (test["type"] == "deathstar") :
+            self._running [vm] = self._startDeathstarWorkload (vm, test)
+        elif (test["type"] == "stress") :
+            self._running [vm] = self._client.launchCmd ([vm], "stress -c " + str (test["nb-cpus"]), user="phil")
         else :
             rootPath = test["name"]
             self._running[vm] = self._client.launchCmd ([vm], "cd " + rootPath + " ; ./launch.sh " + test["params"], user = "phil")
-
+            
     # ***********************************************
     # Kill the test that is currently running in the VM "vm"
     # @info: update the set "self._running"
@@ -238,7 +279,27 @@ class Scenario :
             logger.info ("Ending the test on " + str (vm))
             self._client.killCmds ([self._running [vm]])
             self._output[self._vmNames[vm]] = self._running[vm].processes[0].stdout
+
+            
+    # ***********************************************
+    # Start the workload of a deathstar benchmark (from the current node)
+    # @params:
+    #    - vm: the vm to attack
+    #    - test: the workload to start
+    # @returns: the workload command
+    # ***********************************************
+    def _startDeathstarWorkload (self, vm, test) :
+        node = self._client.getLoadNode ()
+        logger.info ("Start deathstar workload at port : {0} using node {1}".format (test["port"], str (node)))
+        if (test["name"] == "hotel") : 
+            self._client.uploadFiles ([node], ["../utils/deathstar/{0}/wrk2/wrk".format (test["name"]), "../utils/deathstar/{0}/wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua".format (test["name"])], "/tmp/", user="root") 
         
+            cmd = self._client.launchCmd ([node], "/tmp/wrk -D exp -t {0} -c {1} -d {2} -L -s /tmp/mixed-workload_type_1.lua http://{3}:{4} -R {5}".format (test["nb-threads"], test["nb-connections"], str (int(test ["end"]) - int(test["start"]) - 10), vm.address, test["port"], test["nb-per-seconds"]), user="root")
+            return cmd
+        else :
+            logger.info ("Undefined death star test : {0}".format (test["name"]))                    
+
+            
     # ***********************************************
     # Store the result of the scenario in the mongodb database
     # ***********************************************

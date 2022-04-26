@@ -1,7 +1,9 @@
 import yaml
 import time
 import json
-
+from scipy.signal import savgol_filter
+from scipy.signal import lfilter
+        
 # *************************************
 # Class used to analyse the results of a scenario
 # *************************************
@@ -16,11 +18,9 @@ class ResultAnalyser :
         self._client = client
         self._results = self._client.getResult (self._readScenario (scenario))
         self._usageCpuVMs = {}
-        self._hostMemVMs = {}
-        self._relUsageCpuVMs = {}
-        self._guestMemVMs = {}
+        self._freqCpuVMs = {}
+        self._cpuFreq = []
         self._capCpuVMs = {}
-        self._allocMemVMs = {}
         self._vmLegend = {}
         self._vcpus = {}
     
@@ -28,13 +28,13 @@ class ResultAnalyser :
     # Analyse a scenario result
     # *************************************
     def run (self):
-        self._readVMs ()
         self._readVMLegends ()
+        self._readVMs ()
         self._analyseCpuMemResults ()
-
+        
         print (self._latexHeader ())
         print (self._plotCpuResult ())
-        print (self._plotMemResult ())
+        self._plotOutput ()
         print (self._latexFooter ())
         
 
@@ -47,9 +47,13 @@ class ResultAnalyser :
     # *************************************    
     def _readScenarioType (self, vmName) : 
         if (len (self._results) != 0):
-            for v in self._results[0]["scenario"]["vms"] :
+            content = yaml.load (self._results[0]["scenario"], Loader=yaml.FullLoader)
+            for v in content["vms"] :
                 if (v["name"] == vmName[:-1]):
-                    return (v["test"]["type"], v["test"]["name"])
+                    if ("name" in v["test"]):
+                        return (v["test"]["type"], v["test"]["name"])
+                    else:
+                        return (v["test"]["type"], "")
 
         return ("", "")
     
@@ -59,12 +63,9 @@ class ResultAnalyser :
     def _readVMs (self):
         if (len (self._results) != 0):
             for v in self._results[0]["placement"] :
-                self._usageCpuVMs [v] = [[] for i in range (len (self._results))]
-                self._hostMemVMs [v] = [[] for i in range (len (self._results))]
-                self._relUsageCpuVMs [v] = [[] for i in range (len (self._results))]
-                self._guestMemVMs [v] = [[] for i in range (len (self._results))]
-                self._capCpuVMs [v] = [[] for i in range (len (self._results))]
-                self._allocMemVMs [v] = [[] for i in range (len (self._results))]
+                self._usageCpuVMs [v] = [[[] for i in range (len (self._results))] for vcpu in range (self._vcpus[v])]
+                self._freqCpuVMs [v] = [[[] for i in range (len (self._results))] for vcpu in range (self._vcpus[v])]
+                self._capCpuVMs [v] = [[[] for i in range (len (self._results))] for vcpu in range (self._vcpus[v])]
 
     # *************************************
     # Read data about VMs to create legend
@@ -73,8 +74,9 @@ class ResultAnalyser :
         if (len (self._results) != 0):
             content = yaml.load (self._results [0]["scenario"], Loader=yaml.FullLoader)
             for v in content ["vms"] :
-                self._vmLegend [v["name"]] = v["name"] + " " + str (v["vcpus"]) + "@" + str (v["frequency"]) + "MHz, " + str (v["memorySLA"]) + " of " + str (v["memory"]) + "MB";
-                self._vcpus [v["name"]] = v["vcpus"]
+                for i in range (v["instances"]):
+                    self._vmLegend [v["name"] + str (i)] = v["name"] + str (i) + " " + str (v["vcpus"]) + "@" + str (v["frequency"]) + "MHz, " + " of " + str (v["memory"]) + "MB";
+                    self._vcpus [v["name"] + str (i)] = v["vcpus"]
 
 
                 
@@ -90,23 +92,24 @@ class ResultAnalyser :
     # Analyse the cpu and mem result of a given file
     # *************************************
     def _analyseCpuMemResultFile (self, jfile, index) :
+        period = 10000.0
         startInstant = None
         for line in jfile.splitlines () :
             j = json.loads (line)            
             if ('cpu-control' in j) : 
                 for vm in j["cpu-control"] :
-                    max_cpus = self._vcpus[vm[:-1]] * 1000000
-                    self._usageCpuVMs[vm][index] = self._usageCpuVMs[vm][index] + [j["cpu-control"][vm]["host-usage"]]
-                    self._relUsageCpuVMs[vm][index] = self._relUsageCpuVMs[vm][index] + [j["cpu-control"][vm]["relative-usage"]]
-                    self._capCpuVMs [vm][index] = self._capCpuVMs[vm][index] + [(j["cpu-control"][vm]["capping"] / j["cpu-control"][vm]["period"] * 1000000.0) / max_cpus * 100.0]                               
-            elif ('mem-control' in j) :
-                for vm in j["mem-control"] :
-                    self._hostMemVMs [vm][index] = self._hostMemVMs[vm][index] + [j["mem-control"][vm]["host-usage"]]
-                    self._guestMemVMs [vm][index] = self._guestMemVMs[vm][index] + [j["mem-control"][vm]["guest-usage"]]
-                    self._allocMemVMs [vm][index] = self._allocMemVMs[vm][index] + [j["mem-control"][vm]["allocated"]]
+                    max_cpus =  1000000
+                    for vcpu in range (self._vcpus[vm]) :
+                        self._usageCpuVMs[vm][vcpu][index] = self._usageCpuVMs[vm][vcpu][index] + [j["cpu-control"][vm][vcpu]["cycles"] / period * 100.0]
+                        self._freqCpuVMs[vm][vcpu][index] = self._freqCpuVMs[vm][vcpu][index] + [j["cpu-control"][vm][vcpu]["frequency"]]
+                        self._capCpuVMs [vm][vcpu][index] = self._capCpuVMs[vm][vcpu][index] + [(j["cpu-control"][vm][vcpu]["capping"] * 100.0)]                               
+            if ("freq" in j):
+                if (len (self._cpuFreq) == 0):
+                    self._cpuFreq = [[[] for i in range (len (self._results))] for cpu in range (len (j["freq"]))]
 
-
-
+                for i in range (len (j["freq"])) :
+                    self._cpuFreq[i][index] = self._cpuFreq[i][index] + [j["freq"][i]]
+                        
     def _plotCpuResult (self):
         result = ""
         for i in range (len (self._results)) :
@@ -116,84 +119,259 @@ class ResultAnalyser :
                 result = result+ """
                 \\begin{figure}[h]
                 \centering
-                \scalebox{0.7}{
+                \scalebox{1.2}{
                 \\begin{tikzpicture}
-                \\begin{axis} [ylabel=Usage in \%, xlabel=time (s),
+                \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
                 legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
-                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
-                \\addplot [mark=otimes, color=blue!50] coordinates {
+                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
                 """
-                for j in range (len (self._usageCpuVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (self._usageCpuVMs[v][i][j]) + ")"
-
+                for vcpu in range (self._vcpus[v]) :
+                    result = result + """
+                    \\addplot [mark=otimes, color=green!40!gray] coordinates {
+                    """
+                    res = self._smooth (self._freqCpuVMs[v][vcpu][i], 101)
+                    for j in range (len (res)) :
+                        result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+                        
+                    result = result + """
+                    };
+                    \\addlegendentry{Frequency """+ str (vcpu) + """};
+                    """
                 result = result + """
-                };
-                \\addlegendentry{Host usage}
-                \\addplot [mark=otimes, color=green!40!gray] coordinates {
-                """
-                
-                for j in range (len (self._capCpuVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (self._capCpuVMs[v][i][j]) + ")"
-
-                result = result + """
-                };
-                \\addlegendentry{Capping}
                 \end{axis}
                 \end{tikzpicture}     
                 }   
                 \caption{
-                """ + self._vmLegend [v[:-1]] + "}\n\end{figure}\n\n\n"
+                """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\pagebreak"
+
+            result = result + """
+            \\begin{figure}[h]
+            \centering
+            \scalebox{1.2}{
+            \\begin{tikzpicture}
+            \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
+            legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+            smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
+            """
                 
-        return result
-
-
-    def _plotMemResult (self):
-        result = ""
-        for i in range (len (self._results)) :
-            result = result + "\section {Iteration " + str(i) + ", Memory results}\n"
-
-            for v in self._hostMemVMs :
-                result = result+ """
-                \\begin{figure}[h]
-                \centering
-                \scalebox{0.7}{
-                \\begin{tikzpicture}
-                \\begin{axis} [ylabel=Usage in MB, xlabel=time (s),
-                legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
-                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
-                \\addplot [mark=otimes, color=blue!50] coordinates {
-                """
-                for j in range (len (self._hostMemVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (self._hostMemVMs[v][i][j] / 1000) + ")"
-
+            for cpu in range (len (self._cpuFreq)) :
                 result = result + """
-                };
-                \\addlegendentry{Host usage}
                 \\addplot [mark=otimes, color=green!40!gray] coordinates {
                 """
-                
-                for j in range (len (self._guestMemVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (self._guestMemVMs[v][i][j] / 1000) + ")"
 
+                res = self._smooth (self._cpuFreq[cpu][i], 101)
+                for j in range (len (res)) :
+                    result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+                    
                 result = result + """
                 };
-                \\addlegendentry{Guest usage}
-                \\addplot [mark=otimes] coordinates {
+                \\addlegendentry{Frequency """+ str (cpu) + """};
                 """
-                for j in range (len (self._allocMemVMs[v][i])) :
-                    result = result + "\n(" + str (j) + ", " + str (self._allocMemVMs[v][i][j] / 1000) + ")"
+                    
+            result = result + """
+            \end{axis}
+            \end{tikzpicture}     
+            }   
+            \caption{Host frequency}\n\end{figure}\n\n\n\pagebreak"""
 
-                result = result + """
-                };
-                \\addlegendentry{Allocated}
-                \end{axis}
-                \end{tikzpicture}        
-                }
-                \caption{
-                """ + self._vmLegend [v[:-1]] + "}\n\end{figure}\n\n\n"
-                
         return result
+
+
+    def _smooth (self, values, length) :
+        n = 15
+        b = [1.0 / n] * n
+        w = lfilter (b, 1, values) #savgol_filter(values, length, 2)
+        return w
+
+
+    def _plotOutput (self):
+        for i in range (len (self._results)) : 
+            print ("\section {Iteration " + str(i) + ", VM output results}\n")
+            for v in self._results[i]["vms"]:
+                t = self._readScenarioType (v)
+                if (t == ("custom", "alloc_script")):
+                    self._plotAlloc (v, i)
+                if (t == ("deathstar", "hotel")) :
+                    self._plotHotel (v, i)
+                if (t == ("phoronix", "compress-7zip")) :
+                    self._plotCompress (v, i)
+
                 
+    def _plotAlloc (self, v, it):
+        times = []
+        mem = []
+        used = []
+        swap = []        
+        for line in self._results[it]["vms"][v].splitlines ():
+            if (line[:4] == "Done"):
+                times = times + [float (line[7:-2])]
+            elif (line[:4] == "Mem:") :
+                s = line.split ()
+                mem = mem + [int (s[1])]
+                used = used + [int(s[2])]
+            elif (line[:5] == "Swap:") :
+                s = line.split ()
+                swap = swap + [int(s[2])]
+        
+        result = """
+        \\begin{figure}[h]
+        \centering
+        \scalebox{1.2}{
+        \\begin{tikzpicture}
+        \\begin{axis} [ylabel=Usage in MB, xlabel=time (s),
+        legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+        smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
+        \\addplot [mark=otimes, color=blue!50] coordinates {
+        """
+        for j in range (len (used)) :
+            result = result + "\n(" + str (j) + ", " + str (used[j]) + ")"
+                
+        result = result + """
+        };
+        \\addlegendentry{Used memory}
+        \\addplot [mark=otimes, color=green!40!gray] coordinates {
+        """
+                
+        for j in range (len (mem)) :
+            result = result + "\n(" + str (j) + ", " + str (mem [j]) + ")"
+            
+        result = result + """
+        };
+        \\addlegendentry{Usable Memory}
+        \\addplot [mark=otimes] coordinates {
+        """
+        for j in range (len (swap)) :
+            result = result + "\n(" + str (j) + ", " + str (swap[j]) + ")"
+            
+        result = result + """
+        };
+        \\addlegendentry{Used swap}
+        \end{axis}
+        \end{tikzpicture}        
+        }
+        \caption{
+        """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\\pagebreak"
+
+        result = result + """
+        \\begin{figure}[h]
+        \centering
+        \scalebox{1.2}{
+        \\begin{tikzpicture}
+        \\begin{axis} [ylabel=time (s), xlabel=time (s),
+        legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+        smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
+        \\addplot [mark=otimes, color=blue!50] coordinates {
+        """
+        for j in range (len (times)) :
+            result = result + "\n(" + str (j) + ", " + str (times[j]) + ")"
+            
+        result = result + """
+        };
+        \\addlegendentry{Memory access speed}
+        \end{axis}
+        \end{tikzpicture}        
+        }
+        \caption{
+        """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\\pagebreak"
+        print (result)
+
+
+
+    def _plotHotel (self, v, it) :
+        latency = []
+        latency_y = []
+        lines = self._results[it]["vms"][v].splitlines ()
+        i = 0
+        for line in lines :
+            print (line)
+            if ("Latency Distribution (HdrHistogram - Recorded Latency)" in line) :
+                for j in lines[i+1:i+9]:
+                    latency_y = latency_y + [j[0:7]]
+                    if (j[-2] == 'u') : 
+                        latency = latency + [j[9:-2]]
+                    elif j[-2] == 'm':
+                        latency = latency + [float (j[9:-2]) * 1000]
+                    else :
+                        latency = latency + [float (j[9:-2]) * 1000000]            
+            i = i + 1
+
+
+        result = """
+        \\begin{figure}[h]
+        \centering
+        \scalebox{1.2}{
+        \\begin{tikzpicture}
+        \\begin{axis} [ylabel=Latency (milliseconds), xlabel=Percentile,
+        legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+        smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
+        \\addplot [mark=otimes, color=blue!50] coordinates {
+        """
+        for j in range (len (latency)) :
+            result = result + "\n(" + str (latency_y[j]) + ", " + str (latency [j]) + ")"
+                
+        result = result + """
+        };
+        \end{axis}
+        \end{tikzpicture}        
+        }
+        \caption{
+        """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\\pagebreak"
+        
+        print (result)
+
+
+    def _plotCompress (self, v, it) :
+        compression = []
+        decompression = []
+        lines = self._results[it]["vms"][v].splitlines ()
+        i = 0
+        for line in lines : 
+            if ("Test: Compression Rating:" in line):
+                for j in lines[i+1:]:
+                    if j == "":
+                        break
+                    else :
+                        compression = compression + [j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", "")]                            
+            if ("Test: Decompression Rating:" in line):
+                for j in lines[i+1:]:
+                    if j == "":
+                        break
+                    else :
+                        decompression = decompression + [j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", "")]
+            i = i + 1
+
+        result = """
+        \\begin{figure}[h]
+        \centering
+        \scalebox{1.2}{
+        \\begin{tikzpicture}
+        \\begin{axis} [ylabel=Rate, xlabel=Run,
+        legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+        smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]
+        \\addplot [mark=otimes, color=blue!50] coordinates {
+        """
+        for j in range (len (compression)) :
+            result = result + "\n(" + str (j) + ", " + str (compression [j]) + ")"
+                
+        result = result + """
+        };
+
+        \\addplot [mark=otimes, color=green!50] coordinates {
+        """
+        for j in range (len (decompression)) :
+            result = result + "\n(" + str (j) + ", " + str (decompression [j]) + ")"                
+        result = result + """
+        };
+
+        \end{axis}
+        \end{tikzpicture}        
+        }
+        \caption{
+        """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\\pagebreak"
+        
+        print (result)
+
+            
 
     def _latexHeader (self) :
         return """\documentclass[paper=a4,
@@ -218,7 +396,7 @@ class ResultAnalyser :
         \\tikzexternalize
         \\begin{document}
         """
-
+    
 
     def _latexFooter (self) :
         return """
