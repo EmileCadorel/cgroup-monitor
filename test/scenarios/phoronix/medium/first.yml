@@ -1,7 +1,7 @@
 vms: 
    - name: big
      vcpus: 4
-     memory: 8192
+     memory: 4192
      frequency: 1800
      instances: 10
      disk : 10000
@@ -10,11 +10,11 @@ vms:
      test:
        type: phoronix
        name: compress-7zip
-       start: 0
-       nb-run: 10
+       start: 150
+       nb-run: 5
    - name: small
      vcpus: 2
-     memory: 2192
+     memory: 4192
      frequency: 500
      disk : 10000
      memorySLA : 0.9
@@ -24,10 +24,10 @@ vms:
        type: phoronix
        name: compress-7zip
        start: 0 
-       nb-run: 10
+       nb-run: 5
 cpu-market:
   enable : true
-  frequency : 2200
+  frequency : 2400
   trigger-increment : 95.0
   trigger-decrement : 50.0
   increment-speed : 100.0

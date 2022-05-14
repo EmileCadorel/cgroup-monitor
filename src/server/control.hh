@@ -4,6 +4,7 @@
 #include <monitor/libvirt/_.hh>
 #include <server/market/vcpu.hh>
 #include <nlohmann/json.hpp>
+#include "rapl.hh"
 
 namespace server {
 
@@ -35,6 +36,9 @@ namespace server {
 
 	/// The market running the auction for vcpu cycles selling
 	market::VCPUMarket _vcpuMarket;
+
+	/// The reader of rapl values
+	RaplReader _rapl;
 	
     public:
 
@@ -88,6 +92,7 @@ namespace server {
 	 * Dump the log of the cpu controller
 	 */
 	void dumpCpuLogs () ;
+
 
     };
     

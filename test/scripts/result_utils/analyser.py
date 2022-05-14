@@ -3,7 +3,9 @@ import time
 import json
 from scipy.signal import savgol_filter
 from scipy.signal import lfilter
-        
+import math
+import numpy as np
+
 # *************************************
 # Class used to analyse the results of a scenario
 # *************************************
@@ -23,6 +25,8 @@ class ResultAnalyser :
         self._capCpuVMs = {}
         self._vmLegend = {}
         self._vcpus = {}
+        self._alls = {}
+        self._duration = []
     
     # *************************************
     # Analyse a scenario result
@@ -33,7 +37,14 @@ class ResultAnalyser :
         self._analyseCpuMemResults ()
         
         print (self._latexHeader ())
+        self.computeMeanResult ()
+        self._computeMeanOutput ()
+        # print (sum (self._duration) / len (self._duration))
+        # variance = self._smooth (self.computeVariationCPUSpeed (), 101)
+        # print (sum (variance) / len (variance))
+        
         print (self._plotCpuResult ())
+        print (self._plotAverageCpu ())
         self._plotOutput ()
         print (self._latexFooter ())
         
@@ -109,42 +120,122 @@ class ResultAnalyser :
 
                 for i in range (len (j["freq"])) :
                     self._cpuFreq[i][index] = self._cpuFreq[i][index] + [j["freq"][i]]
-                        
+                    
+            self._duration = self._duration + [j["cpu-duration"]]
+
+    def computeMeanResult (self):
+        alls = {}
+        nb_alls = {}
+        for v in self._usageCpuVMs :
+            for vcpu in range (self._vcpus[v]):
+                res = self._freqCpuVMs[v][vcpu][0]
+                name = self._vmLegend[v][0:3]
+                if (name in alls) :
+                    alls[name] = self.add (alls[name], res)
+                    nb_alls[name] = nb_alls[name] + 1
+                else :
+                    alls[name] = res
+                    nb_alls[name] = 1
+
+        for i in nb_alls :
+            for j in range (len (alls[i])):
+                alls[i][j] = (alls[i][j] / nb_alls[i] / 1000) 
+        self._alls = alls
+
+    def computeVariationCPUSpeed (self):
+        variance = []
+        for i in range (len (self._cpuFreq[0][0])):
+            mean = 0
+            for cpu in range (len (self._cpuFreq)):
+                mean = mean + (self._cpuFreq[cpu][0][i] / 1000)
+            mean = mean / len (self._cpuFreq)
+            SS = 0
+            for cpu in range (len (self._cpuFreq)):
+                x = ((self._cpuFreq[cpu][0][i]/1000) - mean)
+                SS = SS + (x * x)
+            variance = variance + [math.sqrt (SS / (len (self._cpuFreq) - 1))]
+        return variance                
+        
+    def add (self, a, b):
+        if (a == []) :
+            return b
+        else :
+            res = []
+            for i in range (len( a)):
+                res = res + [a[i] + b[i]]
+            return res
+                    
     def _plotCpuResult (self):
         result = ""
         for i in range (len (self._results)) :
             result = result + "\section {Iteration " + str(i) + ", CPU results}\n"
 
-            for v in self._usageCpuVMs :
-                result = result+ """
-                \\begin{figure}[h]
-                \centering
-                \scalebox{1.2}{
-                \\begin{tikzpicture}
-                \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
-                legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
-                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
-                """
-                for vcpu in range (self._vcpus[v]) :
-                    result = result + """
-                    \\addplot [mark=otimes, color=green!40!gray] coordinates {
-                    """
-                    res = self._smooth (self._freqCpuVMs[v][vcpu][i], 101)
-                    for j in range (len (res)) :
-                        result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+            # for v in self._usageCpuVMs :
+            #     result = result+ """
+            #     \\begin{figure}[h]
+            #     \centering
+            #     \scalebox{1.2}{
+            #     \\begin{tikzpicture}
+            #     \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
+            #     legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+            #     smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
+            #     """
+            #     for vcpu in range (self._vcpus[v]) :
+            #         result = result + """
+            #         \\addplot [mark=otimes] coordinates {
+            #         """
+            #         res = self._smooth (self._usageCpuVMs[v][vcpu][i], 101)
+            #         for j in range (len (res)) :
+            #             result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
                         
-                    result = result + """
-                    };
-                    \\addlegendentry{Frequency """+ str (vcpu) + """};
-                    """
-                result = result + """
-                \end{axis}
-                \end{tikzpicture}     
-                }   
-                \caption{
-                """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\pagebreak"
+            #         result = result + """
+            #         };
+            #         \\addlegendentry{Frequency """+ str (vcpu) + """};
+            #         """
+            #     result = result + """
+            #     \end{axis}
+            #     \end{tikzpicture}     
+            #     }   
+            #     \caption{
+            #     """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\pagebreak"
 
-            result = result + """
+                
+            # for cpu in range (len (self._cpuFreq)) :
+            #     result = result + """
+            #     \\begin{figure}[h]
+            #     \centering
+            #     \scalebox{1.2}{
+            #     \\begin{tikzpicture}
+            #     \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
+            #     legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+            #     smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
+            #     """
+
+            #     result = result + """
+            #     \\addplot [mark=otimes] coordinates {
+            #     """
+
+            #     res = self._smooth (self._cpuFreq[cpu][i], 101)
+            #     for j in range (len (res)) :
+            #         result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+                    
+            #     result = result + """
+            #     };
+            #     \\addlegendentry{Frequency """+ str (cpu) + """};
+            #     """
+                    
+            #     result = result + """
+            #     \end{axis}
+            #     \end{tikzpicture}     
+            #     }   
+            #     \caption{Host frequency}\n\end{figure}\n\n\n\pagebreak"""
+
+        return result
+
+    def _plotAverageCpu (self) :
+        result = ""
+        for v in self._alls :
+            result = result+ """
             \\begin{figure}[h]
             \centering
             \scalebox{1.2}{
@@ -153,26 +244,23 @@ class ResultAnalyser :
             legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
             smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
             """
-                
-            for cpu in range (len (self._cpuFreq)) :
-                result = result + """
-                \\addplot [mark=otimes, color=green!40!gray] coordinates {
-                """
-
-                res = self._smooth (self._cpuFreq[cpu][i], 101)
-                for j in range (len (res)) :
-                    result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+            result = result + """
+            \\addplot [mark=otimes] coordinates {
+            """
+            res = self._alls[v]
+            for j in range (len (res)) :
+                result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
                     
-                result = result + """
-                };
-                \\addlegendentry{Frequency """+ str (cpu) + """};
-                """
-                    
+            result = result + """
+            };
+            \\addlegendentry{Frequency """+ str (v) + """};
+            """
             result = result + """
             \end{axis}
             \end{tikzpicture}     
             }   
-            \caption{Host frequency}\n\end{figure}\n\n\n\pagebreak"""
+            \caption{Average 
+            """ + v + "}\n\end{figure}\n\n\n\pagebreak"
 
         return result
 
@@ -319,8 +407,42 @@ class ResultAnalyser :
         
         print (result)
 
+    def _computeMeanOutput (self):
+        done = False
+        compression = {}
+        decompression = {}
+        nb = {}
+        for v in self._results[0]["vms"]:            
+            t = self._readScenarioType (v)
+            if (t == ("phoronix", "compress-7zip")) :
+                (c, d) = self._getCompressOutput (v, 0)
+                if v[0:3] not in compression : 
+                    compression [v[0:3]]= c                
+                    decompression [v[0:3]]= d
+                    nb [v[0:3]] = 1
+                else :
+                    compression [v[0:3]] = self._add (compression[v[0:3]], c)
+                    decompression [v[0:3]] = self._add (decompression[v[0:3]], d)
+                    nb [v[0:3]] = nb [v[0:3]] + 1
+                    
+        for i in compression:
+            for j in range (len (compression[i])):
+                compression[i][j] = compression[i][j] / nb[i]
+        for i in decompression:
+            for j in range (len (decompression[i])):
+                decompression[i][j] = decompression[i][j] / nb[i]
 
-    def _plotCompress (self, v, it) :
+        print (compression)
+        print (decompression)
+
+    def _add (self, a, b):
+        print (len (b))
+        res = a
+        for i in range (min (len (a), len (b))):
+            res [i] = int(a[i]) + int (b[i])
+        return res
+
+    def _getCompressOutput (self, v, it) :
         compression = []
         decompression = []
         lines = self._results[it]["vms"][v].splitlines ()
@@ -331,15 +453,19 @@ class ResultAnalyser :
                     if j == "":
                         break
                     else :
-                        compression = compression + [j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", "")]                            
+                        compression = compression + [int (j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", ""))]                            
             if ("Test: Decompression Rating:" in line):
                 for j in lines[i+1:]:
                     if j == "":
                         break
                     else :
-                        decompression = decompression + [j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", "")]
+                        decompression = decompression + [int (j.split ()[-1].replace ("\x1b[1;32m", "").replace ("\x1b[0m", "").replace ("\x1b[1;31m", ""))]
             i = i + 1
+        return (compression, decompression)
+        
 
+    def _plotCompress (self, v, it) :
+        (compression, decompression) = self._getCompressOutput (v, it)
         result = """
         \\begin{figure}[h]
         \centering

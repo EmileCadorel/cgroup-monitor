@@ -1,0 +1,44 @@
+vms: 
+   - name: big
+     vcpus: 4
+     memory: 4192
+     frequency: 1800
+     instances: 6
+     disk : 10000
+     memorySLA : 0.4
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 200
+       nb-run: 15
+   - name: medium
+     vcpus: 4
+     memory: 4192
+     frequency: 1200
+     disk : 10000
+     memorySLA : 0.9
+     instances: 8
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: openssl
+       start: 100
+       nb-run: 4
+   - name: small
+     vcpus: 2
+     memory: 4192
+     frequency: 500
+     disk : 10000
+     memorySLA : 0.9
+     instances: 14
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 0 
+       nb-run: 15
+cpu-market:
+  enable : false
+mem-market :
+  enable : false

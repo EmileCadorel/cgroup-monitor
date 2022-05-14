@@ -21,7 +21,7 @@ namespace server {
 	_vcpuMarket (client)
     {
 	this-> readCpuMarketConfig ();
-
+	
     	fs::create_directories ("/var/log/dio");
 	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());
 	this-> _logPath = fs::path ("/var/log/dio/control-log.json");
@@ -121,6 +121,10 @@ namespace server {
 	json j;
 	j["time"] = logging::get_time ();
 	j["cpu-duration"] = this-> _cpuT.time_since_start ();
+	if (this-> _rapl.isEnabled ()) {
+	    j["rapl"] = this-> _rapl.read ();
+	}
+	
 	json j2, money, freq;
 	int i = 0;	    
 	for (auto j : this-> _libvirt.getLastCPUFrequency ()) {
@@ -151,6 +155,6 @@ namespace server {
 	f.close ();
 	this-> _mutex.unlock ();
     }
-   
+    
 
 }

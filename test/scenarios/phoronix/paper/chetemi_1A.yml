@@ -1,0 +1,37 @@
+vms: 
+   - name: big
+     vcpus: 4
+     memory: 4192
+     frequency: 1800
+     instances: 10
+     disk : 10000
+     memorySLA : 0.4
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 200
+       nb-run: 15
+   - name: small
+     vcpus: 2
+     memory: 4192
+     frequency: 500
+     disk : 10000
+     memorySLA : 0.9
+     instances: 20
+     image : ubuntu-20.04
+     test:
+       type: phoronix
+       name: compress-7zip
+       start: 0 
+       nb-run: 15
+cpu-market:
+  enable : true
+  frequency : 2400
+  trigger-increment : 95.0
+  trigger-decrement : 50.0
+  increment-speed : 100.0
+  decrement-speed : 5.0
+  window-size : 100000
+mem-market :
+  enable : false
