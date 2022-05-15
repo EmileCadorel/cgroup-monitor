@@ -1,10 +1,2 @@
 * Tests
 
-This directory contains the tests for the monitor
-There are three kind of tests : 
- - [[./cpu_tests/README.org][cpu_tests]]: to test the cpu market 
- - [[./memory_tests/README.org][memory_tests]]: to test the memory market
- - [[./cpu_mem_tests/README.org][cpu_mem_tests]]: to test both market at the same time
-
-The directory utils contains common object/script/applications, that are used by both cpu and memory tests.
-

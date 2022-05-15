@@ -13,22 +13,36 @@ namespace server {
 	bool _raplEnabled;
 
 	/// The path of the rapl energy file
-	std::filesystem::path _raplPath;
+	std::filesystem::path _raplPath0;
+
+	/// The path of the rapl energy file
+	std::filesystem::path _raplPath1;
 
 	/// The value of rapl last tick
-	unsigned long _raplValue;
+	unsigned long _raplValue0;
+
+	/// The value of rapl last tick
+	unsigned long _raplValue1;
 
 	/// The file handle of rapl energy 
-	std::ifstream _raplFile;
+	std::ifstream _raplFile0;
+	
+	/// The file handle of rapl energy 
+	std::ifstream _raplFile1;
 	
     public:
 
 	RaplReader ();
 	
 	/**
-	 * Read the value of rapl
+	 * Read the value of rapl package 0
 	 */
-	unsigned long read ();
+	unsigned long readPP0 ();
+
+	/**
+	 * Read the value of rapl package 1
+	 */
+	unsigned long readPP1 ();
 
 	/**
 	 * @returns: true if rapl is readable

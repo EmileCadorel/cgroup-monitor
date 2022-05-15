@@ -22,6 +22,7 @@ class ResultAnalyser :
         self._usageCpuVMs = {}
         self._freqCpuVMs = {}
         self._cpuFreq = []
+        self._rapl = []
         self._capCpuVMs = {}
         self._vmLegend = {}
         self._vcpus = {}
@@ -39,9 +40,9 @@ class ResultAnalyser :
         print (self._latexHeader ())
         self.computeMeanResult ()
         self._computeMeanOutput ()
-        # print (sum (self._duration) / len (self._duration))
-        # variance = self._smooth (self.computeVariationCPUSpeed (), 101)
-        # print (sum (variance) / len (variance))
+        print (sum (self._duration) / len (self._duration))
+        variance = self._smooth (self.computeVariationCPUSpeed (), 101)
+        print (sum (variance) / len (variance))
         
         print (self._plotCpuResult ())
         print (self._plotAverageCpu ())
@@ -117,10 +118,11 @@ class ResultAnalyser :
             if ("freq" in j):
                 if (len (self._cpuFreq) == 0):
                     self._cpuFreq = [[[] for i in range (len (self._results))] for cpu in range (len (j["freq"]))]
-
+                    
                 for i in range (len (j["freq"])) :
                     self._cpuFreq[i][index] = self._cpuFreq[i][index] + [j["freq"][i]]
-                    
+            if ("rapl" in j) :
+                self._rapl = self._rapl + [j["rapl"] / 1000000.0]
             self._duration = self._duration + [j["cpu-duration"]]
 
     def computeMeanResult (self):
@@ -234,6 +236,7 @@ class ResultAnalyser :
 
     def _plotAverageCpu (self) :
         result = ""
+        self._alls["rapl"] = self._rapl
         for v in self._alls :
             result = result+ """
             \\begin{figure}[h]
@@ -261,7 +264,7 @@ class ResultAnalyser :
             }   
             \caption{Average 
             """ + v + "}\n\end{figure}\n\n\n\pagebreak"
-
+        
         return result
 
 

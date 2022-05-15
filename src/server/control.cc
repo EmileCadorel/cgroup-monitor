@@ -122,7 +122,8 @@ namespace server {
 	j["time"] = logging::get_time ();
 	j["cpu-duration"] = this-> _cpuT.time_since_start ();
 	if (this-> _rapl.isEnabled ()) {
-	    j["rapl"] = this-> _rapl.read ();
+	    j["rapl0"] = this-> _rapl.readPP0 ();
+	    j["rapl1"] = this-> _rapl.readPP1 ();
 	}
 	
 	json j2, money, freq;

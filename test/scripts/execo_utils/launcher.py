@@ -92,7 +92,11 @@ class ExecoClient :
             self.launchAndWaitCmd (self._hnodes, "pip3 install pymongo")
             self.uploadFiles (self._hnodes, ["../utils/libdio.deb"], "./")
             self.launchAndWaitCmd (self._hnodes, "dpkg -i libdio.deb")
-
+            self.uploadFiles (self._hnodes, ["../scripts/"], "./")
+            self.uploadFiles (self._hnodes, ["../scenarios/"], "./")
+            self.uploadFiles (self._hnodes, ["../utils/"], "./")
+            self.uploadFiles (self._hnodes, ["../keys/"], "./")
+            
         if (withDownload) :
             self.launchAndWaitCmd (self._hnodes, "mkdir -p .qcow2")
             self.downloadImages (self._hnodes, images, ".qcow2")
