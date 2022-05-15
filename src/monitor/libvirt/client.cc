@@ -541,6 +541,10 @@ namespace monitor {
 		auto proc2 = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "OUTPUT", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
 		proc2.start ();
 		proc2.wait ();
+
+		auto proc3 = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "INPUT", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
+		proc3.start ();
+		proc3.wait ();
 	    }
 
 	    return vm;

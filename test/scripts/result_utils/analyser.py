@@ -121,8 +121,8 @@ class ResultAnalyser :
                     
                 for i in range (len (j["freq"])) :
                     self._cpuFreq[i][index] = self._cpuFreq[i][index] + [j["freq"][i]]
-            if ("rapl" in j) :
-                self._rapl = self._rapl + [j["rapl"] / 1000000.0]
+            if ("rapl0" in j) :
+                self._rapl = self._rapl + [j["rapl0"] / 1000000.0]
             self._duration = self._duration + [j["cpu-duration"]]
 
     def computeMeanResult (self):

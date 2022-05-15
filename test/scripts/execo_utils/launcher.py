@@ -86,10 +86,11 @@ class ExecoClient :
 
             self.launchAndWaitCmd (self._hnodes, "sudo apt-get update")
             
-            self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y python3-pip mongodb-org")
+            self.launchAndWaitCmd (self._hnodes, "sudo apt-get install -y python3-pip mongodb-org luarocks")
             self.launchAndWaitCmd (self._hnodes, "sudo systemctl start mongod")
             self.launchAndWaitCmd (self._hnodes, "pip3 install execo")
             self.launchAndWaitCmd (self._hnodes, "pip3 install pymongo")
+            self.launchAndWaitCmd (self._hnodes, "luarocks install luasocket")
             self.uploadFiles (self._hnodes, ["../utils/libdio.deb"], "./")
             self.launchAndWaitCmd (self._hnodes, "dpkg -i libdio.deb")
             self.uploadFiles (self._hnodes, ["../scripts/"], "./")
@@ -253,7 +254,7 @@ class ExecoClient :
     #    - node: the node on which the port will be opened
     # **********************************
     def createUnusedPort (self, node):
-        port = 2020
+        port = 3030
         if (node in self._ports):
             port = self._ports[node]
             self._ports[node] = port + 1
