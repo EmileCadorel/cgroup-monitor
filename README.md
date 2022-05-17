@@ -27,7 +27,7 @@ libdio_1.0.deb
 
 ## Installation 
 
-The binary can be installed on debian distribution : 
+The binary can be installed on debian distribution (prebuilt file can be found in `bin` directory): 
 
 ```bash
 $ sudo dpkg -i libdio_1.0.deb
