@@ -7,7 +7,7 @@ mkdir -p ${INSTALL_DIR}/dio/src
 mkdir -p ${INSTALL_DIR}/dio/install
 
 cd ${INSTALL_DIR}/dio/src
-git clone https://gitlab.inria.fr/ecadorel/cgroup-monitor.git
+git clone XXX
 mkdir ${INSTALL_DIR}/dio/src/cgroup-monitor/.build
 cd ${INSTALL_DIR}/dio/src/cgroup-monitor/.build
 

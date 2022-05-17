@@ -19,8 +19,7 @@ def parseArguments ():
 
 # Run a scenario  and store the result in the database
 def main (args) : 
-    #client = launcher.ExecoClient.fromIps (ips = ["192.168.101.62"])
-    client  = launcher.ExecoClient.fromG5K ()
+    client = launcher.ExecoClient.fromIps (ips = ["192.168.101.62"])
     client.configureNodes (withInstall = True, withDownload = True)
 
     scenar = scenario.Scenario (args.scenario, client, database.DatabaseClient ())

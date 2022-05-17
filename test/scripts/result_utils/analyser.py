@@ -172,65 +172,65 @@ class ResultAnalyser :
         for i in range (len (self._results)) :
             result = result + "\section {Iteration " + str(i) + ", CPU results}\n"
 
-            # for v in self._usageCpuVMs :
-            #     result = result+ """
-            #     \\begin{figure}[h]
-            #     \centering
-            #     \scalebox{1.2}{
-            #     \\begin{tikzpicture}
-            #     \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
-            #     legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
-            #     smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
-            #     """
-            #     for vcpu in range (self._vcpus[v]) :
-            #         result = result + """
-            #         \\addplot [mark=otimes] coordinates {
-            #         """
-            #         res = self._smooth (self._usageCpuVMs[v][vcpu][i], 101)
-            #         for j in range (len (res)) :
-            #             result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+            for v in self._usageCpuVMs :
+                result = result+ """
+                \\begin{figure}[h]
+                \centering
+                \scalebox{1.2}{
+                \\begin{tikzpicture}
+                \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
+                legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
+                """
+                for vcpu in range (self._vcpus[v]) :
+                    result = result + """
+                    \\addplot [mark=otimes] coordinates {
+                    """
+                    res = self._smooth (self._usageCpuVMs[v][vcpu][i], 101)
+                    for j in range (len (res)) :
+                        result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
                         
-            #         result = result + """
-            #         };
-            #         \\addlegendentry{Frequency """+ str (vcpu) + """};
-            #         """
-            #     result = result + """
-            #     \end{axis}
-            #     \end{tikzpicture}     
-            #     }   
-            #     \caption{
-            #     """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\pagebreak"
+                    result = result + """
+                    };
+                    \\addlegendentry{Frequency """+ str (vcpu) + """};
+                    """
+                result = result + """
+                \end{axis}
+                \end{tikzpicture}     
+                }   
+                \caption{
+                """ + self._vmLegend [v] + "}\n\end{figure}\n\n\n\pagebreak"
 
                 
-            # for cpu in range (len (self._cpuFreq)) :
-            #     result = result + """
-            #     \\begin{figure}[h]
-            #     \centering
-            #     \scalebox{1.2}{
-            #     \\begin{tikzpicture}
-            #     \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
-            #     legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
-            #     smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
-            #     """
+            for cpu in range (len (self._cpuFreq)) :
+                result = result + """
+                \\begin{figure}[h]
+                \centering
+                \scalebox{1.2}{
+                \\begin{tikzpicture}
+                \\begin{axis} [ylabel=Speed in MHz, xlabel=time (s),
+                legend style={nodes={scale=0.5, transform shape}, anchor=north west, draw=black, fill=white, align=left},
+                smooth, mark size=0pt, cycle list name=exotic,  axis lines*=left]                               
+                """
 
-            #     result = result + """
-            #     \\addplot [mark=otimes] coordinates {
-            #     """
+                result = result + """
+                \\addplot [mark=otimes] coordinates {
+                """
 
-            #     res = self._smooth (self._cpuFreq[cpu][i], 101)
-            #     for j in range (len (res)) :
-            #         result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
+                res = self._smooth (self._cpuFreq[cpu][i], 101)
+                for j in range (len (res)) :
+                    result = result + "\n(" + str (j) + ", " + str (res [j]) + ")"
                     
-            #     result = result + """
-            #     };
-            #     \\addlegendentry{Frequency """+ str (cpu) + """};
-            #     """
+                result = result + """
+                };
+                \\addlegendentry{Frequency """+ str (cpu) + """};
+                """
                     
-            #     result = result + """
-            #     \end{axis}
-            #     \end{tikzpicture}     
-            #     }   
-            #     \caption{Host frequency}\n\end{figure}\n\n\n\pagebreak"""
+                result = result + """
+                \end{axis}
+                \end{tikzpicture}     
+                }   
+                \caption{Host frequency}\n\end{figure}\n\n\n\pagebreak"""
 
         return result
 
