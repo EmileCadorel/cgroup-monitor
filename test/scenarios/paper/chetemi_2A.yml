@@ -21,13 +21,10 @@ vms:
      instances: 8
      image : ubuntu-20.04
      test:
-       type: deathstar
-       name: hotel
+       type: phoronix
+       name: openssl
        start: 100
-       end: 220
-       nb-threads: 4
-       nb-connections: 100
-       nb-per-seconds: 20000
+       nb-run: 3
    - name: small
      vcpus: 2
      memory: 4192
