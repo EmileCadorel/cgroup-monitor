@@ -1,93 +1,143 @@
 # Monitor
 
-The monitor is used to manage the virtual frequency, and virtual RAM scaling
+## COMPILATION 
 
-## Configuration file
+The compilation is made using cmake : 
 
-- Monitor
-```
-[monitor] # configuration of the monitor
-report="127.0.0.1:8080" # tcp server sending reports
-daemon="127.0.0.1:8081" # tcp server waiting for new VM infos
-tick=1.0 # tick the monitor in seconds
-format="json" # the format of the report
-slope-history=5 # the number of reports used to compute the slope of the frequency of the VM
-cpu-max-frequency=3000 # The maximal frequency in MHz of the CPU of the host
-
-[market]
-trigger-increment=95.0 # Increment the frequency of the VM if the usage is higher than 95%
-trigger-decrement=50.0 # Decrement the frequency of the VM if the usage is lower than 50%
-increasing-speed=100.0 # Add 100% of the frequency when incrementing
-decreasing-speed=20.0 # Remove 20% of the frequency when decrementing the frequency
-window-size=100000 # Number of cycle to send at each bidding
-```
-
-- Client (might change in the future)
-
-```
-[monitor]
-daemon="127.0.0.1:8081" # the tcp server to which the VM infos are sent
-
-[vms]
-v0 = 200 # the nominal frequency in MHz of the VM named v0
-bob = 2500 # the nominal frequency MHz of the VM named bob
-```
-
-## Usage
-
-1) Compiling : 
-```
+```bash
+$ mkdir .build
 $ cd .build
 $ cmake ..
-$ make
+$ make 
 ```
 
-2) Starting the monitor
-```
-$ ./monitor ../resources/default.toml
-```
+It can also be done using vagrant to create a releasable binary : 
 
-3) Sending VM infos to the monitor (assuming that the VMs are running):
+```bash
+$ cd vagrant
+$ ./configure > /tmp/
+$ vagrant up
+$ vagrant ssh -c "bash -s" < ./build.sh
+vagrant@192.168.121.115's password: vagrant
 
-```
-./client ../resources/client.toml
-```
-
-4) Acquiring results : 
-
-```
-nc localhost 8080 | tee out.json
+$ ls /tmp/dio/bin/
+libdio_1.0.deb
 ```
 
-# Virtual frequency
 
+## Installation 
 
-# Virtual RAM
+The binary can be installed on debian distribution (prebuilt file can be found in `bin` directory): 
 
-## Create swap image
-
-### On the host 
-
-```
-$ qemu-img create -f raw example-vm-swap.img 10G
-$ virsh attach-disk vv0 /tmp/example-vm-swap.img --target vdb --persistent
+```bash
+$ sudo dpkg -i libdio_1.0.deb
 ```
 
-### In the VM
+It gives access to two commands : `dio-monitor` and `dio-client`.
 
+## Dio-monitor
+
+The dio-monitor command is the controller and monitor. It is configured by the file : `/usr/lib/dio/cpu-market.json`
+
+```json
+{
+    "enable" : true,
+    "frequency" : 3000,
+    "trigger-increment" : 95.0,
+    "trigger-decrement" : 50.0,
+    "increment-speed" : 100.0,
+    "decrement-speed" : 20.0,
+    "window-size" : 100000
+}
 ```
-$ cfdisk /dev/vdb # creation of the partition, maybe use parted to automate this, but it seems useless
-$ mkswap /dev/vdb1
-$ swapon /dev/vdb1
+
+- `enable`: if true, the controller is perfoming frequency capping
+- `frequency`: The maximum frequency of the host node
+- `trigger-increment`: percentage of usage that trigger increment of the capping of the vCPU frequency
+- `trigger-decrement`: percentage of usage that trigger decrement of the capping of the vCPU frequency
+- `increment-speed`: percentage of increase of the capping when increment is triggered
+- `decrement-speed`: percentage of decrease of the capping when decrement is triggered
+
+
+The same file is required for memory market, at the path : `/usr/lib/dio/mem-market.json`.
+
+The `dio-monitor` is running a tcp server waiting for client commands.
+The `dio-monitor` is dumping controlling and monitoring information in file `/var/log/dio/control-log.json`.
+
+## Dio-client
+
+The `dio-client` is the command used to provision and kill VMs. It connects to the `dio-monitor` running on the host node.
+
+### provisionning
+
+Using a vm configuration file.
+
+```bash
+$ dio-client --provision example.toml
 ```
 
-## Log the free memory of the VM
+```toml
+[vm]
+name = "v1"
+image = "/home/phil/.qcow2/ubuntu-20.04.qcow2"
+ssh_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJe3QVm7nA05wZAVGhcZT4Rv8Uvkox3PlGfisP2KMHQNhdpLseTWGk6iuB/PylnEhP53dLyHucXuYHXk6rbs4ZxtM7/i8AWvEp/Pew1lJshlCO+OT80FLbdohbOtJXYmZuvy6WAZAd5hPXOPqT4IM0Kxqo6ehRXWEovyfO0+drlZFQNuMhNu9OfJaQCQzKILCZJ9yux6haMNo62L3VAOsRUtzC2AdPAdzIhZSMgkz7KQao16fXRkhMJufl0z9qTL6tkzmyBmzSGJK0EpHYapiScz51mdH//zzskp4SVCkxrg/k7ZR4U9uXtN8yfWtrVX+A9I0o4ydFG4irze3sa7Tt emile@emile-XPS-13-7390"
+vcpus = 4
+memory = 4096
+frequency = 1000
+disk = 10000
+memorySLA = 0.9
+```
 
-The free memory outside the VM and inside the VM are not the same. To
-my knowledge there is no way to acquire the real memory conso of a VM
-from the host side.
+The image `/home/phil/.qcow2/ubuntu-20.04.qcow2` must be pre-downloaded. For example: 
 
-So to get around that problem, i will develop a small daemon that send
-the result of 'free -m' in the daemon socket of the monitor of the host.
-The protocol still needs to be defined
+```bash
+$ wget http://cloud-images.ubuntu.com/releases/focal/release-20210921/ubuntu-20.04-server-cloudimg-amd64.img -O /home/phil/.qcow2/ubuntu-20.04.qcow2
+```
+
+The `ssh_key`, is the public part of the a generated ssh key that will be usable to access the VM using ssh.
+
+The `memorySLA`, is the quantity of guaranteed memory for the VM, and `frequency` is the guaranteed frequency of the vcpus.
+
+### Killing
+
+Using the name of the VM to kill:
+
+```bash
+$ dio-client --kill v1
+```
+
+### Nat 
+
+To open a port in order to access the VM, for example on a machine whose IP is `192.168.158.62` :
+
+```bash
+$ dio-client --nat v1 --host 2020 --guest 22
+$ ssh phil@192.168.158.62 -p 2020 -i my_private_key
+Welcome to Ubuntu 20.04.3 LTS (GNU/Linux 5.4.0-86-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  System information as of Tue May 17 09:07:05 UTC 2022
+
+  System load:  1.71               Processes:             137
+  Usage of /:   11.3% of 11.43GB   Users logged in:       0
+  Memory usage: 5%                 IPv4 address for ens3: 192.168.122.137
+  Swap usage:   0%
+
+
+0 updates can be applied immediately.
+
+
+The list of available updates is more than a week old.
+To check for new updates run: sudo apt update
+
+phil@vv1:~$
+```
+
+## Tests
+
+There a files to test the controller, all of them are located in `test` directory. 
+
 
