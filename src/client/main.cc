@@ -39,6 +39,34 @@ void killVM (const std::string & name, const std::filesystem::path & path = "/et
     }
 }
 
+void ipVM (const std::string & name, const std::filesystem::path & path = "/etc/dio/") {
+     std::ifstream f (path / "daemon.json");
+    std::stringstream ss;
+    ss << f.rdbuf ();
+    
+    auto port = json::parse (ss.str ());
+    TcpStream client (net::SockAddrV4 (net::Ipv4Address (127, 0, 0, 1), port["port"]));
+    client.connect ();
+    
+    client.sendInt (VMProtocol::IP);
+    client.sendInt (name.length ());
+    client.send (name);
+    
+    auto resp = client.receiveInt ();
+    switch (resp) {
+    case VMProtocol::IP : {
+	auto ipLen = client.receiveInt ();
+	auto ip = client.receive (ipLen);
+	logging::success ("VM running at :", ip);
+	break;
+    }
+    default:
+	auto err = client.receiveInt ();
+	logging::error ("VM error :", err);
+	break;
+    }
+}
+
 void provisionVM (const std::filesystem::path & cfgPath, const std::filesystem::path & path = "/etc/dio/") {
     std::ifstream f (path / "daemon.json");
     std::stringstream ss;
@@ -150,7 +178,7 @@ int main (int argc, char ** argv) {
 	} else if (provision != "") {
 	    provisionVM (provision);
 	} else if (ip != "") {
-	    //ipVM (ip);
+	    ipVM (ip);
 	} else if (nat != "") {
 	    natVM (nat, nat_host, nat_guest);
 	} else if (flg) {
