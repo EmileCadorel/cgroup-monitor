@@ -1,0 +1,11 @@
+[Unit]
+Description=dio monitor
+
+[Service]
+User=root
+ExecStart=dio-monitor
+Restart=always
+Slice=dio.slice
+
+[Install]
+WantedBy=multi-user.target

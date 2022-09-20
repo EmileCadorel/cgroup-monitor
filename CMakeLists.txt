@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 project(monitor)
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} --std=c++17 -O3")
 
@@ -38,7 +38,9 @@ target_link_libraries (dio-debug -lpthread -lbfd -lvirt  nlohmann_json::nlohmann
 
 include_directories(${CMAKE_SOURCE_DIR}/src/)
 install (TARGETS dio-client dio-monitor DESTINATION /usr/bin/)
-
+install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/resource/keys/key DESTINATION /etc/dio/keys)
+install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/resource/keys/key.pub DESTINATION /etc/dio/keys)
+install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/resource/dio-monitor.service DESTINATION /etc/systemd/system)
 
 
 

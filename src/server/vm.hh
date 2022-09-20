@@ -89,7 +89,7 @@ namespace server {
 	 * @params: 
 	 *    - path: the directory in which dump the configuration
 	 */
-	void dumpConfig (const std::filesystem::path & path = "/var/lib/dio") const;
+	void dumpConfig (const std::filesystem::path & path = "/etc/dio") const;
     };
 
     

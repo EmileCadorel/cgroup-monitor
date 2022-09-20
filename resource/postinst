@@ -1,0 +1,2 @@
+systemctl daemon-reload
+echo "dio-monitor service configured (type systemctl start dio-monitor.service to start it)"

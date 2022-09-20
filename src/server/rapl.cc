@@ -3,7 +3,7 @@
 namespace server {
 
     RaplReader::RaplReader () {
-	this-> checkRaplCapabilities ();
+	//this-> checkRaplCapabilities ();
     }
     
     bool RaplReader::isEnabled () const {

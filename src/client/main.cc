@@ -13,7 +13,7 @@ using namespace monitor::libvirt;
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-void killVM (const std::string & name, const std::filesystem::path & path = "/var/lib/dio/") {
+void killVM (const std::string & name, const std::filesystem::path & path = "/etc/dio/") {
     std::ifstream f (path / "daemon.json");
     std::stringstream ss;
     ss << f.rdbuf ();
@@ -39,7 +39,7 @@ void killVM (const std::string & name, const std::filesystem::path & path = "/va
     }
 }
 
-void provisionVM (const std::filesystem::path & cfgPath, const std::filesystem::path & path = "/var/lib/dio/") {
+void provisionVM (const std::filesystem::path & cfgPath, const std::filesystem::path & path = "/etc/dio/") {
     std::ifstream f (path / "daemon.json");
     std::stringstream ss;
     ss << f.rdbuf ();
@@ -75,7 +75,7 @@ void provisionVM (const std::filesystem::path & cfgPath, const std::filesystem::
     }
 }
 
-void natVM (const std::string & name, int host, int guest, const std::filesystem::path & path = "/var/lib/dio") {
+void natVM (const std::string & name, int host, int guest, const std::filesystem::path & path = "/etc/dio") {
     std::ifstream f (path / "daemon.json");
     std::stringstream ss;
     ss << f.rdbuf ();
@@ -103,7 +103,7 @@ void natVM (const std::string & name, int host, int guest, const std::filesystem
 }
 
 
-void resetCounters (const std::filesystem::path & path = "/var/lib/dio") {
+void resetCounters (const std::filesystem::path & path = "/etc/dio") {
     std::ifstream f (path / "daemon.json");
     std::stringstream ss;
     ss << f.rdbuf ();

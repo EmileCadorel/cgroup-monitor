@@ -1,0 +1,5 @@
+Package: dio-1.0
+Version: 1.0
+Architecture: amd64
+Maintainer: emile.cadorel@davidson.fr
+Description: dio monitor to manage vms
