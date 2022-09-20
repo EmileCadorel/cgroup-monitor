@@ -37,30 +37,10 @@ It gives access to two commands : `dio-monitor` and `dio-client`.
 
 ## Dio-monitor
 
-The dio-monitor command is the controller and monitor. It is configured by the file : `/usr/lib/dio/cpu-market.json`
+The dio-monitor command is the controller and monitor.  In this simple
+version there is no controlling. It is only used to provision virtual
+machines.
 
-```json
-{
-    "enable" : true,
-    "frequency" : 3000,
-    "trigger-increment" : 95.0,
-    "trigger-decrement" : 50.0,
-    "increment-speed" : 100.0,
-    "decrement-speed" : 20.0,
-    "window-size" : 100000
-}
-```
-
-- `enable`: if true, the controller is perfoming frequency capping
-- `frequency`: The maximum frequency of the host node
-- `trigger-increment`: percentage of usage that trigger increment of the capping of the vCPU frequency
-- `trigger-decrement`: percentage of usage that trigger decrement of the capping of the vCPU frequency
-- `increment-speed`: percentage of increase of the capping when increment is triggered
-- `decrement-speed`: percentage of decrease of the capping when decrement is triggered
-
-
-The `dio-monitor` is running a tcp server waiting for client commands.
-The `dio-monitor` is dumping controlling and monitoring information in file `/var/log/dio/control-log.json`.
 
 ## Dio-client
 
@@ -78,6 +58,7 @@ $ dio-client --provision example.toml
 [vm]
 name = "v1"
 image = "/home/phil/.qcow2/ubuntu-20.04.qcow2"
+os = "ubuntu20.04"
 ssh_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJe3QVm7nA05wZAVGhcZT4Rv8Uvkox3PlGfisP2KMHQNhdpLseTWGk6iuB/PylnEhP53dLyHucXuYHXk6rbs4ZxtM7/i8AWvEp/Pew1lJshlCO+OT80FLbdohbOtJXYmZuvy6WAZAd5hPXOPqT4IM0Kxqo6ehRXWEovyfO0+drlZFQNuMhNu9OfJaQCQzKILCZJ9yux6haMNo62L3VAOsRUtzC2AdPAdzIhZSMgkz7KQao16fXRkhMJufl0z9qTL6tkzmyBmzSGJK0EpHYapiScz51mdH//zzskp4SVCkxrg/k7ZR4U9uXtN8yfWtrVX+A9I0o4ydFG4irze3sa7Tt emile@emile-XPS-13-7390"
 vcpus = 4
 memory = 4096
