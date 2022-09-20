@@ -58,6 +58,9 @@ namespace monitor {
 	    /// The list of vcpu of the VM
 	    std::vector <control::LibvirtVCPUController> _vcpuControllers;
 
+	    /// The os type of the vm
+	    std::string _os;
+
 	    /**
 	     * ================================================================================
 	     * ================================================================================
@@ -100,6 +103,19 @@ namespace monitor {
 	     * @returns: the name of the VM
 	     */
 	    const std::string & id () const;
+
+	    /**
+	     * @returns: the os type of the vm
+	     */
+	    const std::string & os () const;
+
+	    /**
+	     * Set the os type of the vm
+	     * @params: 
+	     *    - os: the os type of the vm
+	     * @returns: *this
+	     */
+	    LibvirtVM& os (const std::string & os);
 
 	    /**
 	     * Set the path of the qcow image to use

@@ -21,6 +21,7 @@ namespace monitor {
 	    this-> _mem = inner.getOr <int> ("memory", 2048);
 	    this-> _freq = inner.getOr<int> ("frequency", 1000);
 	    this-> _memorySLA = inner.getOr <float> ("memorySLA", 0.5);
+	    this-> _os = inner.get<std::string> ("os");
 	    
 	    std::filesystem::path home = getenv ("HOME");	    
 	    this-> _pubKey = inner.getOr <std::string> ("ssh_key", "");
@@ -57,6 +58,15 @@ namespace monitor {
 	    return this-> _id;
 	}
 
+	const std::string & LibvirtVM::os () const {
+	    return this-> _os;
+	}
+
+	LibvirtVM& LibvirtVM::os (const std::string & os) {
+	    this-> _os = os;
+	    return *this;
+	}
+       
 	LibvirtVM & LibvirtVM::qcow (const std::filesystem::path & path) {
 	    this-> _qcow = path;
 	    return *this;

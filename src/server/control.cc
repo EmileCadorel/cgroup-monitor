@@ -20,7 +20,7 @@ namespace server {
 	_vcpuMarketEnabled (false),
 	_vcpuMarket (client)
     {
-	this-> readCpuMarketConfig ();
+	//this-> readCpuMarketConfig ();
 	
     	fs::create_directories ("/var/log/dio");
 	::remove (fs::path ("/var/log/dio/control-log.json").c_str ());

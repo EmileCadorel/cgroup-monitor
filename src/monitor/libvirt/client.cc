@@ -389,7 +389,7 @@ namespace monitor {
 								  "--disk", "v" + vm.id () + ".qcow2,format=qcow2,bus=virtio",
 								  "--disk", "user.iso,device=cdrom",
 								  "--network", "bridge=virbr0,model=virtio" ,
-								  "--os-type", "linux",
+								  "--os-variant", vm.os (),
 								  "--virt-type", "kvm",
 								  "--noautoconsole"},
 		path);
