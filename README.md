@@ -41,6 +41,17 @@ The dio-monitor command is the controller and monitor.  In this simple
 version there is no controlling. It is only used to provision virtual
 machines.
 
+```bash
+sudo systemctl start dio-monitor.service
+```
+
+Stopping the service : 
+
+```bash
+sudo systemctl stop dio-monitor.service
+```
+
+Warning: it does not kill the VMs at stop.
 
 ## Dio-client
 
@@ -57,12 +68,12 @@ $ dio-client --provision example.toml
 ```toml
 [vm]
 name = "v1"
+user = "bob"
 image = "/home/phil/.qcow2/ubuntu-20.04.qcow2"
 os = "ubuntu20.04"
 ssh_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJe3QVm7nA05wZAVGhcZT4Rv8Uvkox3PlGfisP2KMHQNhdpLseTWGk6iuB/PylnEhP53dLyHucXuYHXk6rbs4ZxtM7/i8AWvEp/Pew1lJshlCO+OT80FLbdohbOtJXYmZuvy6WAZAd5hPXOPqT4IM0Kxqo6ehRXWEovyfO0+drlZFQNuMhNu9OfJaQCQzKILCZJ9yux6haMNo62L3VAOsRUtzC2AdPAdzIhZSMgkz7KQao16fXRkhMJufl0z9qTL6tkzmyBmzSGJK0EpHYapiScz51mdH//zzskp4SVCkxrg/k7ZR4U9uXtN8yfWtrVX+A9I0o4ydFG4irze3sa7Tt emile@emile-XPS-13-7390"
 vcpus = 4
 memory = 4096
-frequency = 1000
 disk = 10000
 ```
 
