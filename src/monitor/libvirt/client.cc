@@ -145,7 +145,7 @@ namespace monitor {
 	}
 
 	virDomainPtr LibvirtClient::retreiveDomain (const std::string & name) {
-	    return virDomainLookupByName (this-> _conn, ("v" + name).c_str ());	   
+	    return virDomainLookupByName (this-> _conn, (name).c_str ());	   
 	}
 
 	XMLDocument* LibvirtClient::getXML (const LibvirtVM & vm) const {
@@ -216,7 +216,7 @@ namespace monitor {
 	    try {
 		this-> kill (vm-> id ());
 	    
-		auto vPath = path / ("v" + vm-> id ());
+		auto vPath = path / (vm-> id ());
 	    
 		// Prepare the different file required for the VM booting
 		this-> createDirAndVMFile (*vm, vPath);
@@ -227,19 +227,13 @@ namespace monitor {
 		// wait the ip of the VM
 		this-> waitIpVM (*vm, vPath);
 
-		// Attach the swap disk to the VM
-		this-> attachSwapDisk (*vm, vPath);
-
-		// Mount the swap space on the VM
-		this-> mountSwap (*vm, vPath);
-
 		logging::success ("VM", vm-> id (), "is ready at ip : ", vm-> ip ());
 	    
 		vm-> _dom = this-> retreiveDomain (vm-> id ());
 	    
-		for (auto &it : vm-> getVCPUControllers ()) {
-		    it.enable ();
-		}
+		// for (auto &it : vm-> getVCPUControllers ()) {
+		//     it.enable ();
+		// }
 			    
 		this-> _running.push_back (vm);
 
@@ -254,7 +248,7 @@ namespace monitor {
 	void LibvirtClient::kill (const std::string & vm, const std::filesystem::path & path) {
 	    auto v = this-> getVM (vm);
 	    if (v != nullptr) {
-		auto vPath = path / ("v" + v-> id ());
+		auto vPath = path / (v-> id ());
 		
 		// Kill the domain
 		this-> killDomain (*v);
@@ -279,7 +273,7 @@ namespace monitor {
 
 	void LibvirtClient::createDirAndVMFile (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
 	    auto qcowFile = vm.qcow ();	    
-	    auto osPath = vPath / ("v" + vm.id () + ".qcow2");
+	    auto osPath = vPath / (vm.id () + ".qcow2");
 	    try {
 		fs::create_directories (vPath);
 		fs::copy_file (qcowFile, osPath, fs::copy_options::overwrite_existing);
@@ -294,7 +288,6 @@ namespace monitor {
 		this-> resizeImage (vm, vPath);
 
 		// Prepare the image for booting
-		this-> createSwapDisk (vm, vPath);
 		this-> prepareImage (vm, vPath);
 		
 	    } catch (std::exception & e) {
@@ -349,7 +342,7 @@ namespace monitor {
 	void LibvirtClient::resizeImage (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
 	    std::stringstream ss;
 	    ss  << "+" << vm.disk () << "M";
-	    auto proc = concurrency::SubProcess ("qemu-img", {"resize", "v" + vm.id () + ".qcow2", ss.str ()}, vPath.c_str ());
+	    auto proc = concurrency::SubProcess ("qemu-img", {"resize", vm.id () + ".qcow2", ss.str ()}, vPath.c_str ());
 	    proc.start ();
 	    if (proc.wait () != 0) {
 		std::cout << "ERROR : " << proc.stderr ().read () << std::endl;
@@ -358,7 +351,7 @@ namespace monitor {
 	}
 
 	void LibvirtClient::prepareImage (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
-	    auto proc = concurrency::SubProcess ("virt-sysprep", {"-a", "v" + vm.id () + ".qcow2"}, vPath);
+	    auto proc = concurrency::SubProcess ("virt-sysprep", {"-a", vm.id () + ".qcow2"}, vPath);
 	    proc.start ();
 	    if (proc.wait () != 0) {
 		std::cout << "ERROR : " << proc.stderr ().read () << std::endl;
@@ -383,10 +376,10 @@ namespace monitor {
 	    mem << vm.memory ();
 	    cpu << vm.vcpus ();
 	    
-	    auto proc = concurrency::SubProcess ("virt-install", {"--import", "--name", "v" + vm.id (),
+	    auto proc = concurrency::SubProcess ("virt-install", {"--import", "--name", vm.id (),
 								  "--ram", mem.str (),
 								  "--vcpu", cpu.str (),
-								  "--disk", "v" + vm.id () + ".qcow2,format=qcow2,bus=virtio",
+								  "--disk", vm.id () + ".qcow2,format=qcow2,bus=virtio",
 								  "--disk", "user.iso,device=cdrom",
 								  "--network", "bridge=virbr0,model=virtio" ,
 								  "--os-variant", vm.os (),
@@ -409,7 +402,7 @@ namespace monitor {
 	    std::string mac = "", ip = "";
 	    virDomainPtr dom = nullptr;
 	    for (;;) {
-		dom = virDomainLookupByName (this-> _conn, ("v" + vm.id ()).c_str ());
+		dom = virDomainLookupByName (this-> _conn, (vm.id ()).c_str ());
 		if (dom != nullptr) break;
 	    }
 	    
@@ -453,7 +446,7 @@ namespace monitor {
 	}
 	
 	void LibvirtClient::attachSwapDisk (const LibvirtVM & vm, const std::filesystem::path & vPath) const {
-	    auto proc = concurrency::SubProcess ("virsh", {"attach-disk", "v" + vm.id (), (vPath / "swap-space.img").c_str (), "--target", "vdb", "--persistent"}, vPath);
+	    auto proc = concurrency::SubProcess ("virsh", {"attach-disk", vm.id (), (vPath / "swap-space.img").c_str (), "--target", "vdb", "--persistent"}, vPath);
 
 	    proc.start ();
 	    
@@ -508,7 +501,7 @@ namespace monitor {
 	    auto isoFile = path / ("user.iso");
 	    auto metaFile = path / ("meta-data");
 	    auto userFile = path / ("user-data");
-	    auto qcowFile = path / ("v" + vm.id () + ".qcow2");
+	    auto qcowFile = path / (vm.id () + ".qcow2");
 	    auto swapFile = path / ("swap-space.img");
 
 	    ::remove (isoFile.c_str ());

@@ -120,7 +120,7 @@ namespace server {
     void VMServer::treatIp (net::TcpStream & stream) {
 	auto len = stream.receiveInt ();
 	auto name = stream.receive (len);
-	try {
+	try {	    
 	    if (this-> _libvirt.hasVM (name)) {
 		auto vm = this-> _libvirt.getVM (name);
 		if (vm != nullptr) {
