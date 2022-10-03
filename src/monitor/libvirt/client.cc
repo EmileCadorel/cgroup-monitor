@@ -65,7 +65,13 @@ namespace monitor {
 		throw LibvirtError ("Connection to hypervisor failed\n");
 	    }
 
-	    logging::success ("Libvirt client connected to :", this-> _uri);
+	    auto proc = concurrency::SubProcess ("virsh", {"net-start",  "default"}, ".");
+	    proc.start ();
+	    if (proc.wait () != 0) {
+		logging::error ("Failed to start virsh network");
+	    }
+	    
+	    logging::success ("Libvirt client connected to :", this-> _uri);	    
 	    this-> killAllRunningDomains ();
 	}
 
@@ -404,6 +410,7 @@ namespace monitor {
 	    for (;;) {
 		dom = virDomainLookupByName (this-> _conn, (vm.id ()).c_str ());
 		if (dom != nullptr) break;
+		timer.sleep (0.5);
 	    }
 	    
 	    for (;;) { // retreive the mac address of the vm
@@ -422,6 +429,7 @@ namespace monitor {
 		    } catch (...) {
 		    }
 		}
+		timer.sleep (0.5);
 	    }
 
 	    for (;;) { // retreive the ip address of the vm from the mac address
@@ -440,6 +448,7 @@ namespace monitor {
 		    }
 		    if (ip != "") break;
 		} catch (...) {}
+		timer.sleep (0.5);
 	    }
 
 	    vm.mac (mac).ip (ip);
@@ -526,50 +535,48 @@ namespace monitor {
 		std::stringstream hport, gport;
 		hport << host;
 		gport << guest;
+
+		struct ifaddrs *addresses;
+		if (getifaddrs(&addresses) == -1)
+		{
+		    return vm;
+		}	    
 	    
-		auto proc = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "PREROUTING", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
-		proc.start ();
-		proc.wait ();
+		struct ifaddrs *address = addresses;
+		while(address)
+		{
+		    int family = address->ifa_addr->sa_family;
+		    if (family == AF_INET && std::string (address->ifa_name) != "virbr0")
+		    {			
+			std::string ip_face = std::string (address-> ifa_name);
 
-		auto proc2 = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "OUTPUT", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
-		proc2.start ();
-		proc2.wait ();
+			auto proc = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "PREROUTING", "-p", "tcp", "-i", ip_face, "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
+			proc.start ();
+			proc.wait ();
 
-		// auto proc3 = concurrency::SubProcess ("iptables", {"-t", "nat", "-I", "INPUT", "-p", "tcp", "--dport", hport.str (), "-j", "DNAT", "--to", vm.ip () + ":" + gport.str ()}, ".");
-		// proc3.start ();
-		// proc3.wait ();
+			std::string iptables = "iptables -t nat -I PREROUTING -p tcp -i " + ip_face + " --dport " + hport.str () + " -j DNAT --to " + vm.ip () + ":" + gport.str ();			
+			logging::info ("NAT routing enabled for interface ip :", ip_face, " ", iptables);
+		    }
+		    address = address->ifa_next;
+		}
+	    
+		freeifaddrs(addresses);		
 	    }
 
 	    return vm;
 	}
 
 	void LibvirtClient::enableNatRouting () const {	    
-	    struct ifaddrs *addresses;
-	    if (getifaddrs(&addresses) == -1)
-	    {
-		return ;
-	    }	    
-	    
-	    struct ifaddrs *address = addresses;
-	    while(address)
-	    {
-		int family = address->ifa_addr->sa_family;
-		if (family == AF_INET && std::string (address->ifa_name) != "virbr0")
-		{
-		    char ap[100];
-		    const int family_size = family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-		    getnameinfo(address->ifa_addr,family_size, ap, sizeof(ap), 0, 0, NI_NUMERICHOST);
-		    std::string ip_face = std::string (ap);
-		    
-		    auto proc = concurrency::SubProcess ("iptables", {"-I", "FORWARD", "-m", "state", "-o", ip_face, "-d", "192.168.122.0/24", "--state", "NEW,RELATED,ESTABLISHED", "-j", "ACCEPT"}, ".");
-		    proc.start ();
-		    proc.wait ();
-		    logging::info ("NAT routing enabled for interface ip :", ip_face);
-		}
-		address = address->ifa_next;
-	    }
-	    
-	    freeifaddrs(addresses);
+	    auto proc = concurrency::SubProcess ("iptables", {"-I", "FORWARD", "-m", "state", "-o", "virbr0", "-d", "192.168.122.0/24", "--state", "NEW,RELATED,ESTABLISHED", "-j", "ACCEPT"}, ".");
+	    proc.start ();
+	    proc.wait ();
+
+	    auto proc2 = concurrency::SubProcess ("iptables", {"-t", "nat", "-A", "POSTROUTING", "-j", "MASQUERAD" }, ".");
+	    proc2.start ();
+	    proc2.wait ();
+
+	    logging::info ("NAT cmd :", "iptables", "-I", "FORWARD", "-m", "state", "-o", "virbr0", "-d", "192.168.122.0/24", "--state", "NEW,RELATED,ESTABLISHED", "-j", "ACCEPT");
+	    logging::info ("NAT cmd :", "iptables", "-t", "nat", "-A", "POSTROUTING", "-j", "MASQUERAD");
 	}
 
 	/**

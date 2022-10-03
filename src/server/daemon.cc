@@ -23,7 +23,7 @@ namespace server {
     void Daemon::kill () {
 	this-> _vms.kill ();
 	//this-> _controller.kill ();	
-	this-> _libvirt.killAllRunningDomains ();
+	//this-> _libvirt.killAllRunningDomains ();
 	this-> _libvirt.disconnect ();
     }
 
