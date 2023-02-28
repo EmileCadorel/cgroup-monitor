@@ -147,7 +147,7 @@ namespace monitor {
 	     * @throws:
 	     *   - LibvirtError: if the provisionning failed
 	     */
-	    const LibvirtVM * provision (const utils::config::dict & cfg, const std::filesystem::path & destPath = "/tmp/");	    
+	    LibvirtVM * provision (const utils::config::dict & cfg, const std::filesystem::path & destPath = "/tmp/");	    
 
 	    /**
 	     * Kill the VM that is running

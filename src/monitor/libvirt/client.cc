@@ -217,7 +217,7 @@ namespace monitor {
 	}
 
        	
-	const LibvirtVM * LibvirtClient::provision (const utils::config::dict & cfg, const std::filesystem::path & path) {
+	LibvirtVM * LibvirtClient::provision (const utils::config::dict & cfg, const std::filesystem::path & path) {
 	    auto vm = new LibvirtVM (cfg);
 	    try {
 		this-> kill (vm-> id ());
@@ -236,10 +236,10 @@ namespace monitor {
 		logging::success ("VM", vm-> id (), "is ready at ip : ", vm-> ip ());
 	    
 		vm-> _dom = this-> retreiveDomain (vm-> id ());
-	    
-		// for (auto &it : vm-> getVCPUControllers ()) {
-		//     it.enable ();
-		// }
+
+		for (auto &it : vm-> getVCPUControllers ()) {
+		    it.enable ();
+		}
 			    
 		this-> _running.push_back (vm);
 

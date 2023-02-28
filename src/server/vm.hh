@@ -21,6 +21,9 @@ namespace server {
 	/// The libvirt connection
 	monitor::libvirt::LibvirtClient & _libvirt;
 
+	// The frequency of the cpu 
+	int _freq;
+	
 	/// The controller of markets
 	Controller & _controller;
 

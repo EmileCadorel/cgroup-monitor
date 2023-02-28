@@ -18,8 +18,20 @@ namespace server {
     VMServer::VMServer (monitor::libvirt::LibvirtClient & client, Controller & control) :
 	_listener (net::SockAddrV4 (net::Ipv4Address (0, 0, 0, 0), 0)),
 	_libvirt (client),
-	_controller (control)
-    {}
+	_controller (control),
+	_freq (3000)
+    {
+	std::ifstream f (std::filesystem::path ("/etc/dio/cpu.json"));	
+	if (f.good ()) {
+	    std::stringstream ss;
+	    ss << f.rdbuf ();
+	    f.close ();
+	    auto j = json::parse (ss.str ());
+	    if (j.contains ("frequency")) {
+		this-> _freq = j["frequency"].get<int> ();
+	    }
+	}
+    }
     
 
     void VMServer::start () {
@@ -83,6 +95,14 @@ namespace server {
 	    auto name = inner.get<std::string> ("name");
 	    if (!this-> _libvirt.hasVM (name)) {
 		auto vm = this-> _libvirt.provision (cfg);
+		if (inner.has <int> ("freq")) {
+		    auto freq = ((double) inner.get<int> ("freq") / (double) this-> _freq) * 1000000;
+		    for (auto & v : vm-> getVCPUControllers ()) {
+			v.allocated () = freq;
+		    }
+		    vm-> applyMarketAllocation (100000);
+		}
+		
 		stream.sendInt (VMProtocol::IP);
 		auto ip = vm-> ip ();
 		stream.sendInt (ip.length ());
