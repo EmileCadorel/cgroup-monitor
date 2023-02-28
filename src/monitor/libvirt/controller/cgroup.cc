@@ -24,8 +24,8 @@ namespace monitor {
 
 	    void cgroup::enable (unsigned int vcpuId) {
 		concurrency::timer t;
-		std::stringstream ss; ss << "vcpu" << vcpuId;
-		std::stringstream vname; vname << "v" << this-> _vmName;
+		std::stringstream ss; ss << "libvirt/vcpu" << vcpuId;
+		std::stringstream vname; vname << this-> _vmName;
 		std::filesystem::path cgroupPath;
 		if (this-> _v2) {
 		    auto path = fs::path ("/sys/fs/cgroup/machine.slice");
@@ -49,7 +49,7 @@ namespace monitor {
 		    }
 		
 		}
-		
+
 		this-> _procId = this-> readProcId (cgroupPath);
 		
 		std::stringstream ss2;
@@ -139,6 +139,7 @@ namespace monitor {
 	    
 	    std::filesystem::path cgroup::recursiveSearch (const fs::path & path, const std::string & name) {
 		if (fs::is_directory (path)) {
+		    std::cout << path << " " << name << " " << (path.u8string ().find(name) != std::string::npos) << std::endl;
 		    if (path.u8string ().find(name) != std::string::npos) {
 			return path;
 		    } else {
